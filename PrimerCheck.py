@@ -26,10 +26,14 @@ in line 142 will do well for others"""
 
 import os
 import re
+import sys
 import argparse
 import textwrap
-from Bio.Blast.Applications import NcbiblastxCommandline
-from Bio import SeqIO
+try:
+    from Bio.Blast.Applications import NcbiblastxCommandline
+    from Bio import SeqIO
+except: ImportError, e:
+    sys.exit("BioPython not found on your system. Program Terminated")
 
 
 
