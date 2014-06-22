@@ -179,7 +179,7 @@ def main():
     elif args.fa != None:
         """Executes if Fasta input file supplied"""
         handle = open(args.fa, 'rU'); records = list(SeqIO.parse(handle, 'fasta'))
-        handleQual = open(args.fq, 'rU'); recordsQual = list(SeqIO.parse(handleQual, 'qual'))
+        handleQual = open(args.qual, 'rU'); recordsQual = list(SeqIO.parse(handleQual, 'qual'))
 
     handleF = open(args.frd, 'rU'); recordF = list(SeqIO.parse(handleF, 'fasta'))
     handleR = open(args.rev, 'rU'); recordR = list(SeqIO.parse(handleR, 'fasta'))
