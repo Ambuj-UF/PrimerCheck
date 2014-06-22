@@ -72,7 +72,7 @@ if args.fa == True and not args.qual:
     parser.error('-qual argument is required in "-fa" mode.')
 
 if args.fq == True and not args.frd:
-    parser.error('-frd argument is required in "-fa" mode.')
+    parser.error('-frd argument is required in "-fq" mode.')
 
 if args.fq == True and not args.qual:
     parser.error('-rev argument is required in "-fq" mode.')
