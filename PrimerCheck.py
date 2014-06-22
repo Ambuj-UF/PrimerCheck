@@ -23,11 +23,11 @@
 
 import os
 import re
-import glob
-from Bio.Blast.Applications import NcbiblastxCommandline
-from Bio import SeqIO
 import argparse
 import textwrap
+from Bio.Blast.Applications import NcbiblastxCommandline
+from Bio import SeqIO
+
 
 
 parser = argparse.ArgumentParser(prog='PrimerCheck',
