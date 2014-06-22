@@ -18,7 +18,10 @@
 # under certain conditions;                                                                                    #
 #                                                                                                              #
 ################################################################################################################
-
+"""Code requires local protein sequence database/file to perform Blastx operation. 
+This executes for OR database which I obtained from Johny Wright, PhD student, 
+Biology Department, University of Florida. A slight change in database name supplied 
+in line 142 will do well for others"""
 
 
 import os
