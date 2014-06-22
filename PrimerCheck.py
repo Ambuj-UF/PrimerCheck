@@ -37,7 +37,7 @@ parser = argparse.ArgumentParser(prog='PrimerCheck',
     ----------------------------------------------------------------------------------------------------------
     \t\t\t\t\t Welcome to PrimerCheck-1.0
     \t\t\t\t Use "python PrimerCheck.py -h" for help
-    \t\t\t Designed at Kimbal-Braun Lab Group, University of Florida
+    \t\t\t Designed at Kimball-Braun Lab Group, University of Florida
     
     ----------------------------------------------------------------------------------------------------------
     
