@@ -28,6 +28,7 @@ from Bio.SeqRecord import SeqRecord
 from Bio.Alphabet.IUPAC import IUPACAmbiguousDNA
 
 
+
 parser = argparse.ArgumentParser(prog='MutateP',
                                  version= 'MutateP-1.0',
                                  formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -49,19 +50,6 @@ parser.add_argument('-o', type=str, required = True, help='Enter output file nam
 
 args = parser.parse_args()
 
-handle = open(args.i, 'rU')
-records = list(SeqIO.parse(handle, 'fasta'))
-
-groupDict = {'Y': ['C', 'T'],
-             'R': ['A', 'G'],
-             'N': ['A', 'C', 'T', 'G'],
-             'H': ['A', 'C', 'T'],
-             'D': ['A', 'G', 'T'],
-             'S': ['C', 'G'],
-             'M': ['A', 'C']
-}
-
-newRecord = []; procRecord = []
 
 def mutate(myList, group):
     retSeqList = [] if group in myList[0] else myList
@@ -85,6 +73,20 @@ def mutate(myList, group):
     return retSeqList
 
 def main():
+    handle = open(args.i, 'rU')
+    records = list(SeqIO.parse(handle, 'fasta'))
+
+    groupDict = {'Y': ['C', 'T'],
+        'R': ['A', 'G'],
+        'N': ['A', 'C', 'T', 'G'],
+        'H': ['A', 'C', 'T'],
+        'D': ['A', 'G', 'T'],
+        'S': ['C', 'G'],
+        'M': ['A', 'C']
+    }
+
+    newRecord = []; procRecord = []
+
     for rec in records:
         sequence = str(rec.seq); myList = [sequence]
         for groups in groupDict.keys():
@@ -103,5 +105,4 @@ def main():
 
 if __name__ == "__main__":
     main()
-
 
