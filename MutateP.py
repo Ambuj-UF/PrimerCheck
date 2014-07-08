@@ -35,7 +35,7 @@ parser = argparse.ArgumentParser(prog='MutateP',
                                  description=textwrap.dedent('''\
     ----------------------------------------------------------------------------------------------------------
     \t\t\t\t\t Welcome to MutateP-1.0
-    \t\t\t\t Use "python PrimerCheck.py -h" for help
+    \t\t\t\t Use "python MutateP.py -h" for help
     \t\t\t Designed at Kimbal-Braun Lab Group, University of Florida
     
     ----------------------------------------------------------------------------------------------------------
