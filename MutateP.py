@@ -20,7 +20,6 @@
 ################################################################################################################
 
 
-
 import argparse
 import textwrap
 from Bio import SeqIO
@@ -35,7 +34,7 @@ parser = argparse.ArgumentParser(prog='MutateP',
                                  description=textwrap.dedent('''\
     ----------------------------------------------------------------------------------------------------------
     \t\t\t\t\t Welcome to MutateP-1.0
-    \t\t\t\t Use "python MutateP.py -h" for help
+    \t\t\t\t Use "python PrimerCheck.py -h" for help
     \t\t\t Designed at Kimbal-Braun Lab Group, University of Florida
     
     ----------------------------------------------------------------------------------------------------------
@@ -85,38 +84,24 @@ def mutate(myList, group):
 
     return retSeqList
 
-
-for rec in records:
-    sequence = str(rec.seq); myList = [sequence]
-    for groups in groupDict.keys():
-        myList = mutate(myList, groups)
+def main():
+    for rec in records:
+        sequence = str(rec.seq); myList = [sequence]
+        for groups in groupDict.keys():
+            myList = mutate(myList, groups)
     
-    newRecord.append([SeqRecord(Seq(str(x), IUPACAmbiguousDNA()), id=rec.id + str(i), name=rec.id + str(i),\
+        newRecord.append([SeqRecord(Seq(str(x), IUPACAmbiguousDNA()), id=rec.id + str(i), name=rec.id + str(i),\
                                 description=rec.id + str(i)) for i, x in enumerate(myList)])
 
-for val in newRecord:
-    for inval in val:
-        procRecord.append(inval)
+    for val in newRecord:
+        for inval in val:
+            procRecord.append(inval)
 
-with open(args.o, 'w') as fp:
-    SeqIO.write(procRecord, fp, 'fasta')
-
-
+    with open(args.o, 'w') as fp:
+        SeqIO.write(procRecord, fp, 'fasta')
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+if __name__ == "__main__":
+    main()
 
 
