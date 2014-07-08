@@ -77,12 +77,12 @@ def main():
     records = list(SeqIO.parse(handle, 'fasta'))
 
     groupDict = {'Y': ['C', 'T'],
-        'R': ['A', 'G'],
-        'N': ['A', 'C', 'T', 'G'],
-        'H': ['A', 'C', 'T'],
-        'D': ['A', 'G', 'T'],
-        'S': ['C', 'G'],
-        'M': ['A', 'C']
+                 'R': ['A', 'G'],
+                 'N': ['A', 'C', 'T', 'G'],
+                 'H': ['A', 'C', 'T'],
+                 'D': ['A', 'G', 'T'],
+                 'S': ['C', 'G'],
+                 'M': ['A', 'C']
     }
 
     newRecord = []; procRecord = []
