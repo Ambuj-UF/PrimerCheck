@@ -1,5 +1,5 @@
 ################################################################################################################
-# Tool for mutating primers                                                                                    #
+# Tool for creating primer sequences by substituting nucleotides at variable positions                         #
 #                                                                                                              #
 # Copyright (C) {2014}  {Ambuj Kumar, Kimball-Braun lab group, Biology Department, University of Florida}      #
 #                                                                                                              #
@@ -20,13 +20,13 @@
 ################################################################################################################
 
 
+
 import argparse
 import textwrap
 from Bio import SeqIO
 from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
 from Bio.Alphabet.IUPAC import IUPACAmbiguousDNA
-
 
 
 parser = argparse.ArgumentParser(prog='MutateP',
@@ -50,6 +50,14 @@ parser.add_argument('-o', type=str, required = True, help='Enter output file nam
 
 args = parser.parse_args()
 
+groupDict = {'Y': ['C', 'T'],
+    'R': ['A', 'G'],
+    'N': ['A', 'C', 'T', 'G'],
+    'H': ['A', 'C', 'T'],
+    'D': ['A', 'G', 'T'],
+    'S': ['C', 'G'],
+    'M': ['A', 'C']
+    }
 
 def mutate(myList, group):
     retSeqList = [] if group in myList[0] else myList
@@ -76,15 +84,6 @@ def main():
     handle = open(args.i, 'rU')
     records = list(SeqIO.parse(handle, 'fasta'))
 
-    groupDict = {'Y': ['C', 'T'],
-                 'R': ['A', 'G'],
-                 'N': ['A', 'C', 'T', 'G'],
-                 'H': ['A', 'C', 'T'],
-                 'D': ['A', 'G', 'T'],
-                 'S': ['C', 'G'],
-                 'M': ['A', 'C']
-    }
-
     newRecord = []; procRecord = []
 
     for rec in records:
@@ -105,4 +104,22 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
