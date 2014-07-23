@@ -19,24 +19,15 @@
 #                                                                                                              #
 ################################################################################################################
 
-"""Code requires local protein sequence database/file to perform Blastx operation. 
-This executes for OR database which I obtained from Johny Wright, PhD student, 
-Biology Department, University of Florida. A slight change in database name supplied 
-in line 148 will do well for others"""
-
-import sys
-
-try:
-    from Bio.Blast.Applications import NcbiblastxCommandline
-    from Bio import SeqIO
-except: ImportError, e:
-    sys.exit("BioPython not found on your system. Program Terminated")
-
 
 import os
 import re
+import glob
 import argparse
 import textwrap
+import UserString
+from Bio import SeqIO
+from Bio.Blast.Applications import NcbiblastxCommandline
 
 
 parser = argparse.ArgumentParser(prog='PrimerCheck',
@@ -46,7 +37,7 @@ parser = argparse.ArgumentParser(prog='PrimerCheck',
     ----------------------------------------------------------------------------------------------------------
     \t\t\t\t\t Welcome to PrimerCheck-1.0
     \t\t\t\t Use "python PrimerCheck.py -h" for help
-    \t\t\t Designed at Kimball-Braun Lab Group, University of Florida
+    \t\t\t Designed at Kimbal-Braun Lab Group, University of Florida
     
     ----------------------------------------------------------------------------------------------------------
     
@@ -56,11 +47,14 @@ group = parser.add_mutually_exclusive_group()
 
 group.add_argument('-fq', type=str, default = None, help='Enter fastq file name')
 group.add_argument('-fa', type=str, default = None,  help='Enter fasta file name')
-parser.add_argument('-frd', type=str, help='Enter forward primer file name')
-parser.add_argument('-rev', type=str, help='Enter reverse primer file name')
+parser.add_argument('-frd', type=str, required = True, help='Enter forward primer file name')
+parser.add_argument('-rev', type=str, required = True, help='Enter reverse primer file name')
 parser.add_argument('-qual', type=str, help='Enter quality data file name')
 
 args = parser.parse_args()
+
+if args.fa == None and args.fq == None:
+    parser.error('fasta or fastq input file required.')
 
 if args.fa == True and not args.frd:
     parser.error('-frd argument is required in "-fa" mode.')
@@ -72,67 +66,27 @@ if args.fa == True and not args.qual:
     parser.error('-qual argument is required in "-fa" mode.')
 
 if args.fq == True and not args.frd:
-    parser.error('-frd argument is required in "-fq" mode.')
+    parser.error('-frd argument is required in "-fa" mode.')
 
 if args.fq == True and not args.qual:
     parser.error('-rev argument is required in "-fq" mode.')
 
 
-def oneNucChange(primer):
-    """Generates list of primer with one nucleotide substitution"""
-    for i, nuc in enumerate(str(primer)):
-        lprime = list(primer)
-        for val in ['A', 'C', 'G', 'T']:
-            myList.append(''.join(lprime[i] = val))
-    return myList
-
-def twoNucChange(primer):
-    """Generates list of primer with two nucleotide substitution"""
-    primers = oneNucChange(primer):
-    for primerData in primers:
-        for i, nuc in enumerate(str(primerData)):
-            lprime = list(primerData)
-            for val in ['A', 'C', 'G', 'T']:
-                myList.append(''.join(lprime[i] = val))
-    return myList
-
-def threeNucChange(primer):
-    """Generates list of primer with three nucleotide substitution"""
-    primers = twoNucChange(primer):
-    for primerData in primers:
-        for i, nuc in enumerate(str(primerData)):
-            lprime = list(primerData)
-            for val in ['A', 'C', 'G', 'T']:
-                myList.append(''.join(lprime[i] = val))
-    return myList
-
-def prodPrimer(primerList, record):
-    """Checks if primer matches with the input nucleotide sequence"""
-    for primers in primerList:
-        if primers in str(record.seq) == True:
-            return primers, True
-    return None, False
-
 def primerMatch(record, recordP):
     """Simulation code for mapping primers on the nucleotide sequence and trimming out
         the terminal regions from start to the end of forward primer and from the begening
         of reverse primer to the end of sequence"""
-    oneFlag = False
-    twoFlag = False
     for i, val in enumerate(recordP):
-        primerToUse = str(val.seq) if str(val.seq) in str(record.seq) == True else None
+        primerToUse = str(val.seq) if str(val.seq) in str(record.seq) else str(val.seq)[::-1] if str(val.seq)[::-1] in str(record.seq) else None
         if primerToUse == None:
-            primerToUse, oneFlag = prodPrimer(oneNucChange(val.seq), record)
-        if oneFlag == Flase:
-            primerToUse, twoFlag = prodPrimer(twoNucChange(val.seq), record)
-        if twoFlag == False:
-            primerToUse = prodPrimer(threeNucChange(val.seq), record)[0]
-
-        continue if primerToUse == None else pass
-        startPosList = [x.start() for x in re.finditer(primerToUse, str(record.seq))]
-        endPosList = [x.end() for x in re.finditer(primerToUse, str(record.seq))]
-        record.annotations['Primer_' + str(val.id)] = (val.id)
-        return record.annotations, startPosList, endPosList
+            primerToUse = str(val.seq.reverse_complement()) if str(val.seq.reverse_complement()) in str(record.seq) else str(val.seq.reverse_complement())[::-1] if str(val.seq.reverse_complement())[::-1] in str(record.seq) else None
+        if primerToUse == None:
+            continue
+        else:
+            startPosList = [x.start() for x in re.finditer(primerToUse, str(record.seq))]
+            endPosList = [x.end() for x in re.finditer(primerToUse, str(record.seq))]
+            record.annotations['Primer_' + str(val.id).split('_')[2]] = (val.id)
+            return record.annotations, startPosList, endPosList
 
 def blastxOR(BlastInput):
     """Run BLASTX on OR database"""
@@ -145,40 +99,50 @@ def blastxOR(BlastInput):
                    
     with open('sequenceTag.txt', 'w') as fp:
         for i, rec in enumerate(recordX):
-            blastx_cline = NcbiblastxCommandline(query=rec, db="ORaaseqs_gallus_taeniopygia.txt",\
-                                                evalue=e-10, outfmt=5, out=("OR-Output/Result.%s"%rec.id))
-            stdout, stderr = blastx_cline()
+            stringNuc = ''
+            for nuc in rec.seq:
+                stringNuc = stringNuc + nuc
+        
+            blastx_cline = NcbiblastxCommandline(db="ORaaseqs_gallus_taeniopygia.txt",\
+                                                evalue=0.0000000001, outfmt=5, out=("OR-Output/Result.%s"%rec.id.split('/')[1]))
+            try:
+                stdout, stderr = blastx_cline(stdin = stringNuc)
+            except:
+                continue
                    
             """Parse Blast output"""
-            with open('OR-Output/Result.' + str(rec.id),'r') as xml:
-                Flag = False; eFlag = False; e_val = []
+            with open('OR-Output/Result.' + str(rec.id).split('/')[1],'r') as xml:
+                cFlag = False; eFlag = False; e_val = []
                 for line in xml:
-                    if re.search('No hits found', line) != None:
+                    if re.search('No hits found', line) == None:
                         """Check if the sequence belong to OR group"""
-                        Flag = True
+                        cFlag = True
                     if re.search('<Hsp_evalue>', line) != None:
                         """Extract evalue"""
                         line = line.strip(); line = line.rstrip();
                         line = line.strip('<Hsp_evalue>'); line = line.strip('</')
                         e_val.append(line)
                         eFlag = True
-                   
-                if Flag == True and eFlag == True:
-                    fp.write("%s : OR = True, evalue = %s"%(rec.id, e_val[0]))
+            
+                if cFlag == True and eFlag == True:
+                    fp.write("%s : OR = True, evalue = %s\n"%(rec.id, e_val[0]))
                 else:
-                    fp.write("%s : OR = False"%rec.id)
-                   
+                    fp.write("%s : OR = False\n"%rec.id)
+
 
 def main():
     if args.fq != None:
-    """Executes if Fastq input file supplied"""
+        """Executes if Fastq input file supplied"""
         file = args.fq
         with open('sequences.fasta', 'w') as fp, open('RawQual.qual', 'w') as fq:
             handle = open(file, 'rU')
             print("Importing fastq file. This will take a while\n")
-            rec = list(SeqIO.parse(handle, 'fastq-illumina'))
-            SeqIO.write(rec, fp, 'fasta'); SeqIO.write(rec, fr, 'qual')
-            
+            rec = list(SeqIO.parse(handle, 'fastq'))
+            print("FastQ file imported\n")
+            print("Writing Fasta and Qual data\n")
+            SeqIO.write(rec, fp, 'fasta'); SeqIO.write(rec, fq, 'qual')
+        
+        print("All done. Now importing records\n")
         handle = open('sequences.fasta', 'rU'); records = list(SeqIO.parse(handle, 'fasta'))
         handleQual = open('RawQual.qual', 'rU'); recordsQual = list(SeqIO.parse(handleQual, 'qual'))
 
@@ -190,24 +154,51 @@ def main():
     handleF = open(args.frd, 'rU'); recordF = list(SeqIO.parse(handleF, 'fasta'))
     handleR = open(args.rev, 'rU'); recordR = list(SeqIO.parse(handleR, 'fasta'))
 
+    print("Starting Analysis\nFor larger dataset it might take few minutes to complete\n\nRunning......")
+    
     for i, val in enumerate(records):
+        fFlag = False; rFlag = False
         try:
-            fpAnnotate, startPosListF, endPosListF = primerMatch(records, recordF)
+            fpAnnotate, startPosListF, endPosListF = primerMatch(val, recordF)
         except TypeError:
-            print("Forward primer match not found for %s" %val.id)
-            continue
-        try:
-            rpAnnotate, startPosListR, endPosListR = primerMatch(records, recordR)
-        except TypeError:
-            print("Reverse primer match not found for %s" %val.id)
-            continue
+            fFlag = True
 
-        records[i].seq = val.seq[endPosListF[0] + 1: startPosListF[-1]]
+        try:
+            rpAnnotate, startPosListR, endPosListR = primerMatch(val, recordR)
+        except TypeError:
+            rFlag = True
+
+        if fFlag == False and rFlag == False:
+            records[i].seq = val.seq[endPosListF[0] + 1: startPosListR[-1]]
+        elif fFlag == True and rFlag == False:
+            records[i].seq = val.seq[0: startPosListR[-1]]
+        elif fFlag == False and rFlag == True:
+            records[i].seq = val.seq[endPosListF[0] + 1: -1]
+        else:
+            pass
+
         for j, recQual in enumerate(recordsQual):
             if recQual.id == records[i].id:
-                recQual.seq = recQual.seq[endPosListF[0] + 1: startPosListF[-1]]
+                if fFlag == False and rFlag == False:
+                    recQual.letter_annotations["phred_quality"] = recQual.letter_annotations["phred_quality"][endPosListF[0] + 1: startPosListR[-1]]\
+                                                              + [float(x) for x in str('0'*(len(recQual.letter_annotations["phred_quality"])\
+                                                              - len(recQual.letter_annotations["phred_quality"][endPosListF[0] + 1: startPosListR[-1]\
+                                                              ])))]
+                elif fFlag == True and rFlag == False:
+                    recQual.letter_annotations["phred_quality"] = recQual.letter_annotations["phred_quality"][0: startPosListR[-1]]\
+                                                              + [float(x) for x in str('0'*(len(recQual.letter_annotations["phred_quality"])\
+                                                              - len(recQual.letter_annotations["phred_quality"][0: startPosListR[-1]\
+                                                              ])))]
+                elif fFlag == False and rFlag == True:
+                    recQual.letter_annotations["phred_quality"] = recQual.letter_annotations["phred_quality"][endPosListF[0] + 1: -1]\
+                                                              + [float(x) for x in str('0'*(len(recQual.letter_annotations["phred_quality"])\
+                                                              - len(recQual.letter_annotations["phred_quality"][endPosListF[0] + 1: -1\
+                                                              ])))]
+
             recordsQual[j] = recQual
-        records[i].annotations.update(dict(fpAnnotate.items() + rpAnnotate.items()))
+
+        if rFlag == False:
+            records[i].annotations.update(dict(rpAnnotate.items()))
 
     with open('BlastInput.fas', 'w') as fp, open('ProcessedQual.qual', 'w') as fq:
         SeqIO.write(records, fp, 'fasta')
@@ -215,12 +206,35 @@ def main():
 
     with open('Annotations.txt', 'w') as fp:
         for val in records:
-            fp.write('%s\n' %val.annotations)
+            fp.write('%s: %s\n' %(val.id, val.annotations))
 
+    print("Performing blast search for sequences against OR database\n")
     blastxOR('BlastInput.fas')
+    print("All Done. Yur blast outputs are available in Output folder and OR tags are stored in sequenceTag.txt file\n")
 
 
                    
 if __name__ == "__main__":
     main()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
