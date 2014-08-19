@@ -240,9 +240,9 @@ def main():
             fp.write('%s: %s\t\t%s\t\t%s\t\t%s\n' %(val.id, val.annotations, posDict[val.id][0], posDict[val.id][1], posDict[val.id][2]))
 
 
-#print("Performing blast search for sequences against OR database\n")
-#blastxOR('BlastInput.fas')
-#print("All Done. Yur blast outputs are available in Output folder and OR tags are stored in sequenceTag.txt file\n")
+    print("Performing blast search for sequences against OR database\n")
+    blastxOR('BlastInput.fas')
+    print("All Done. Yur blast outputs are available in Output folder and OR tags are stored in sequenceTag.txt file\n")
 
 
                    
