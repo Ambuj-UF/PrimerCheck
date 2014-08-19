@@ -77,14 +77,22 @@ def primerMatch(record, recordP):
         the terminal regions from start to the end of forward primer and from the begening
         of reverse primer to the end of sequence"""
     for i, val in enumerate(recordP):
-        primerToUse = str(val.seq) if str(val.seq) in str(record.seq) else str(val.seq)[::-1] if str(val.seq)[::-1] in str(record.seq) else None
+        primerToUse = str(val.seq) if str(val.seq) in str(record.seq) or str(val.seq)[0:15] in str(record.seq) or str(val.seq)[5:-1] in str(record.seq) else str(val.seq)[::-1] if str(val.seq)[::-1] in str(record.seq) or str(val.seq)[::-1][0:15] in str(record.seq) or str(val.seq)[::-1][5:-1] in str(record.seq) else None
         if primerToUse == None:
-            primerToUse = str(val.seq.reverse_complement()) if str(val.seq.reverse_complement()) in str(record.seq) else str(val.seq.reverse_complement())[::-1] if str(val.seq.reverse_complement())[::-1] in str(record.seq) else None
+            primerToUse = str(val.seq.reverse_complement()) if str(val.seq.reverse_complement()) in str(record.seq) or str(val.seq.reverse_complement())[0:15] in str(record.seq) or str(val.seq.reverse_complement())[5:-1] in str(record.seq) else str(val.seq.reverse_complement())[::-1] if str(val.seq.reverse_complement())[::-1] in str(record.seq) or str(val.seq.reverse_complement())[::-1][0:15] in str(record.seq) or str(val.seq.reverse_complement())[::-1][5:-1] in str(record.seq) else None
         if primerToUse == None:
             continue
         else:
             startPosList = [x.start() for x in re.finditer(primerToUse, str(record.seq))]
+            if startPosList == []:
+                startPosList = [x.start() for x in re.finditer(primerToUse[0:15], str(record.seq))]
+            if startPosList == []:
+                startPosList = [x.start() for x in re.finditer(primerToUse[5:-1], str(record.seq))]
             endPosList = [x.end() for x in re.finditer(primerToUse, str(record.seq))]
+            if endPosList == []:
+                endPosList = [x.end() for x in re.finditer(primerToUse[0:15], str(record.seq))]
+            if endPosList == []:
+                endPosList = [x.end() for x in re.finditer(primerToUse[5:-1], str(record.seq))]
             record.annotations['Primer_' + str(val.id).split('_')[2]] = (val.id)
             return record.annotations, startPosList, endPosList
 
@@ -155,27 +163,42 @@ def main():
     handleR = open(args.rev, 'rU'); recordR = list(SeqIO.parse(handleR, 'fasta'))
 
     print("Starting Analysis\nFor larger dataset it might take few minutes to complete\n\nRunning......")
-    
+    posDict = dict()
+
     for i, val in enumerate(records):
         fFlag = False; rFlag = False
         try:
             fpAnnotate, startPosListF, endPosListF = primerMatch(val, recordF)
         except TypeError:
             fFlag = True
+            endPosListF = ['NA']
 
         try:
             rpAnnotate, startPosListR, endPosListR = primerMatch(val, recordR)
         except TypeError:
+            startPosListR = ['NA']
             rFlag = True
 
+        posDict[val.id] = ([endPosListF[0], startPosListR[-1], len(val.seq)])
+
         if fFlag == False and rFlag == False:
-            records[i].seq = val.seq[endPosListF[0] + 1: startPosListR[-1]]
+            if endPosListF[0]/len(val.seq) < 0.7:
+                records[i].seq = val.seq[endPosListF[0] + 1: startPosListR[-1]]
+            else:
+                records[i].seq = val.seq[endPosListR[0] + 1: startPosListF[-1]]
         elif fFlag == True and rFlag == False:
-            records[i].seq = val.seq[0: startPosListR[-1]]
+            if startPosListR[-1]/len(val.seq) < 0.7:
+                records[i].seq = val.seq[endPosListR[0] + 1: -1]
+            else:
+                records[i].seq = val.seq[0: startPosListR[-1]]
         elif fFlag == False and rFlag == True:
-            records[i].seq = val.seq[endPosListF[0] + 1: -1]
+            if endPosListF[0]/len(val.seq) < 0.7:
+                records[i].seq = val.seq[endPosListF[0] + 1: -1]
+            else:
+                records[i].seq = val.seq[0: startPosListF[-1]]
         else:
             pass
+
 
         for j, recQual in enumerate(recordsQual):
             if recQual.id == records[i].id:
@@ -206,23 +229,17 @@ def main():
 
     with open('Annotations.txt', 'w') as fp:
         for val in records:
-            fp.write('%s: %s\n' %(val.id, val.annotations))
+            fp.write('%s: %s\t\t%s\t\t%s\t\t%s\n' %(val.id, val.annotations, posDict[val.id][0], posDict[val.id][1], posDict[val.id][2]))
 
-    print("Performing blast search for sequences against OR database\n")
-    blastxOR('BlastInput.fas')
-    print("All Done. Yur blast outputs are available in Output folder and OR tags are stored in sequenceTag.txt file\n")
+
+#print("Performing blast search for sequences against OR database\n")
+#blastxOR('BlastInput.fas')
+#print("All Done. Yur blast outputs are available in Output folder and OR tags are stored in sequenceTag.txt file\n")
 
 
                    
 if __name__ == "__main__":
     main()
-
-
-
-
-
-
-
 
 
 
