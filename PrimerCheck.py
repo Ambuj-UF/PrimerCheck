@@ -77,9 +77,17 @@ def primerMatch(record, recordP):
         the terminal regions from start to the end of forward primer and from the begening
         of reverse primer to the end of sequence"""
     for i, val in enumerate(recordP):
-        primerToUse = str(val.seq) if str(val.seq) in str(record.seq) or str(val.seq)[0:15] in str(record.seq) or str(val.seq)[5:-1] in str(record.seq) else str(val.seq)[::-1] if str(val.seq)[::-1] in str(record.seq) or str(val.seq)[::-1][0:15] in str(record.seq) or str(val.seq)[::-1][5:-1] in str(record.seq) else None
+        primerToUse = str(val.seq) if str(val.seq) in str(record.seq) or str(val.seq)[0:15] in str(record.seq)\
+            or str(val.seq)[5:-1] in str(record.seq) else str(val.seq)[::-1] if str(val.seq)[::-1] in str(record.seq)\
+                or str(val.seq)[::-1][0:15] in str(record.seq) or str(val.seq)[::-1][5:-1] in str(record.seq)\
+                    else None
         if primerToUse == None:
-            primerToUse = str(val.seq.reverse_complement()) if str(val.seq.reverse_complement()) in str(record.seq) or str(val.seq.reverse_complement())[0:15] in str(record.seq) or str(val.seq.reverse_complement())[5:-1] in str(record.seq) else str(val.seq.reverse_complement())[::-1] if str(val.seq.reverse_complement())[::-1] in str(record.seq) or str(val.seq.reverse_complement())[::-1][0:15] in str(record.seq) or str(val.seq.reverse_complement())[::-1][5:-1] in str(record.seq) else None
+            primerToUse = str(val.seq.reverse_complement()) if str(val.seq.reverse_complement()) in str(record.seq)\
+                or str(val.seq.reverse_complement())[0:15] in str(record.seq) or str(val.seq.reverse_complement())[5:-1] in str(record.seq)\
+                    else str(val.seq.reverse_complement())[::-1] if str(val.seq.reverse_complement())[::-1] in str(record.seq)\
+                        or str(val.seq.reverse_complement())[::-1][0:15] in str(record.seq)\
+                            or str(val.seq.reverse_complement())[::-1][5:-1] in str(record.seq)\
+                                else None
         if primerToUse == None:
             continue
         else:
