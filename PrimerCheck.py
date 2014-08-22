@@ -25,7 +25,6 @@ import re
 import glob
 import argparse
 import textwrap
-import UserString
 from Bio import SeqIO
 from Bio.Blast.Applications import NcbiblastxCommandline
 
@@ -72,48 +71,57 @@ if args.fq == True and not args.qual:
     parser.error('-rev argument is required in "-fq" mode.')
 
 
-def primerMatch(record, recordP):
+def primerMatch(record, recordP, ptype):
+    
     """Simulation code for mapping primers on the nucleotide sequence and trimming out
         the terminal regions from start to the end of forward primer and from the begening
         of reverse primer to the end of sequence"""
+    
     for i, val in enumerate(recordP):
-        primerToUse = str(val.seq) if str(val.seq) in str(record.seq) or str(val.seq)[0:15] in str(record.seq)\
-            or str(val.seq)[5:-1] in str(record.seq) else str(val.seq)[::-1] if str(val.seq)[::-1] in str(record.seq)\
-                or str(val.seq)[::-1][0:15] in str(record.seq) or str(val.seq)[::-1][5:-1] in str(record.seq)\
-                    else None
+        if ptype == 'forward':
+            primerToUse = str(val.seq) if str(val.seq) in str(record.seq) or str(val.seq)[5:-1] in str(record.seq) else str(val.seq)[::-1] if str(val.seq)[::-1] in str(record.seq) or str(val.seq)[::-1][5:-1] in str(record.seq) else None
+        elif ptype == 'reverse':
+            primerToUse = str(val.seq) if str(val.seq) in str(record.seq) or str(val.seq)[0:15] in str(record.seq) else str(val.seq)[::-1] if str(val.seq)[::-1] in str(record.seq) or str(val.seq)[::-1][0:15] in str(record.seq) else None
+
         if primerToUse == None:
-            primerToUse = str(val.seq.reverse_complement()) if str(val.seq.reverse_complement()) in str(record.seq)\
-                or str(val.seq.reverse_complement())[0:15] in str(record.seq) or str(val.seq.reverse_complement())[5:-1] in str(record.seq)\
-                    else str(val.seq.reverse_complement())[::-1] if str(val.seq.reverse_complement())[::-1] in str(record.seq)\
-                        or str(val.seq.reverse_complement())[::-1][0:15] in str(record.seq)\
-                            or str(val.seq.reverse_complement())[::-1][5:-1] in str(record.seq)\
-                                else None
+            if ptype == 'forward':
+                primerToUse = str(val.seq.reverse_complement()) if str(val.seq.reverse_complement()) in str(record.seq) or str(val.seq.reverse_complement())[5:-1] in str(record.seq) else str(val.seq.reverse_complement())[::-1] if str(val.seq.reverse_complement())[::-1] in str(record.seq) or str(val.seq.reverse_complement())[::-1][5:-1] in str(record.seq) else None
+            elif ptype == 'reverse':
+                primerToUse = str(val.seq.reverse_complement()) if str(val.seq.reverse_complement()) in str(record.seq) or str(val.seq.reverse_complement())[0:15] in str(record.seq) else str(val.seq.reverse_complement())[::-1] if str(val.seq.reverse_complement())[::-1] in str(record.seq) or str(val.seq.reverse_complement())[::-1][0:15] in str(record.seq) else None
+
         if primerToUse == None:
             continue
         else:
             startPosList = [x.start() for x in re.finditer(primerToUse, str(record.seq))]
-            if startPosList == []:
-                startPosList = [x.start() for x in re.finditer(primerToUse[0:15], str(record.seq))]
-            if startPosList == []:
+            if startPosList == [] and ptype == 'forward':
                 startPosList = [x.start() for x in re.finditer(primerToUse[5:-1], str(record.seq))]
+            if startPosList == [] and ptype == 'reverse':
+                startPosList = [x.start() for x in re.finditer(primerToUse[0:15], str(record.seq))]
             endPosList = [x.end() for x in re.finditer(primerToUse, str(record.seq))]
-            if endPosList == []:
-                endPosList = [x.end() for x in re.finditer(primerToUse[0:15], str(record.seq))]
-            if endPosList == []:
+            if endPosList == [] and ptype == 'forward':
                 endPosList = [x.end() for x in re.finditer(primerToUse[5:-1], str(record.seq))]
+            if endPosList == [] and ptype == 'reverse':
+                endPosList = [x.end() for x in re.finditer(primerToUse[0:15], str(record.seq))]
             record.annotations['Primer_' + str(val.id).split('_')[2]] = (val.id)
             return record.annotations, startPosList, endPosList
 
+
 def blastxOR(BlastInput):
     """Run BLASTX on OR database"""
-    handleX = open(BlastInput, 'rU')
-    recordX = list(SeqIO.parse(handleX, 'fasta'))
+    if type(BlastInput) is str:
+        handleX = open(BlastInput, 'rU')
+        recordX = list(SeqIO.parse(handleX, 'fasta'))
+        tagfile = 'sequenceTag.txt'
+    elif type(BlastInput) is list:
+        recordX = BlastInput; newRecord = []; initFlag = True
+        tagfile = 'sequenceTagCheck.txt'
+
     try:
         os.mkdir('OR-Output')
     except OSError:
         pass
                    
-    with open('sequenceTag.txt', 'w') as fp:
+    with open(tagfile, 'w') as fp:
         for i, rec in enumerate(recordX):
             stringNuc = ''
             for nuc in rec.seq:
@@ -133,6 +141,12 @@ def blastxOR(BlastInput):
                     if re.search('No hits found', line) == None:
                         """Check if the sequence belong to OR group"""
                         cFlag = True
+                        if initFlag == True:
+                            newRecord.append(rec)
+                    elif re.search('No hits found', line) != None and initFlag == True:
+                        rec.seq = rec.seq.reverse_complement()
+                        newRecord.append(rec)
+                
                     if re.search('<Hsp_evalue>', line) != None:
                         """Extract evalue"""
                         line = line.strip(); line = line.rstrip();
@@ -144,6 +158,14 @@ def blastxOR(BlastInput):
                     fp.write("%s : OR = True, evalue = %s\n"%(rec.id, e_val[0]))
                 else:
                     fp.write("%s : OR = False\n"%rec.id)
+
+    print("Cleaning OR-Output directory\n")
+    fileList = os.listdir("/OR-Output")
+    for fileName in fileList:
+        os.remove(dirPath+"/"+fileName)
+
+    if initFlag == True:
+        return newRecord
 
 
 def main():
@@ -173,16 +195,20 @@ def main():
     print("Starting Analysis\nFor larger dataset it might take few minutes to complete\n\nRunning......")
     posDict = dict()
 
+    print("Running initial Blastx scan...\n")
+    records = blastxOR(records)
+    print("Initial blastx scan completed!\n Initiating primer mapping module\n")
+
     for i, val in enumerate(records):
         fFlag = False; rFlag = False
         try:
-            fpAnnotate, startPosListF, endPosListF = primerMatch(val, recordF)
+            fpAnnotate, startPosListF, endPosListF = primerMatch(val, recordF, 'forward')
         except TypeError:
             fFlag = True
             endPosListF = ['NA']
 
         try:
-            rpAnnotate, startPosListR, endPosListR = primerMatch(val, recordR)
+            rpAnnotate, startPosListR, endPosListR = primerMatch(val, recordR, 'reverse')
         except TypeError:
             startPosListR = ['NA']
             rFlag = True
@@ -211,20 +237,11 @@ def main():
         for j, recQual in enumerate(recordsQual):
             if recQual.id == records[i].id:
                 if fFlag == False and rFlag == False:
-                    recQual.letter_annotations["phred_quality"] = recQual.letter_annotations["phred_quality"][endPosListF[0] + 1: startPosListR[-1]]\
-                                                              + [float(x) for x in str('0'*(len(recQual.letter_annotations["phred_quality"])\
-                                                              - len(recQual.letter_annotations["phred_quality"][endPosListF[0] + 1: startPosListR[-1]\
-                                                              ])))]
+                    recQual.letter_annotations["phred_quality"] = recQual.letter_annotations["phred_quality"][endPosListF[0] + 1: startPosListR[-1]] + [float(x) for x in str('0'*(len(recQual.letter_annotations["phred_quality"]) - len(recQual.letter_annotations["phred_quality"][endPosListF[0] + 1: startPosListR[-1]])))]
                 elif fFlag == True and rFlag == False:
-                    recQual.letter_annotations["phred_quality"] = recQual.letter_annotations["phred_quality"][0: startPosListR[-1]]\
-                                                              + [float(x) for x in str('0'*(len(recQual.letter_annotations["phred_quality"])\
-                                                              - len(recQual.letter_annotations["phred_quality"][0: startPosListR[-1]\
-                                                              ])))]
+                    recQual.letter_annotations["phred_quality"] = recQual.letter_annotations["phred_quality"][0: startPosListR[-1]] + [float(x) for x in str('0'*(len(recQual.letter_annotations["phred_quality"]) - len(recQual.letter_annotations["phred_quality"][0: startPosListR[-1]])))]
                 elif fFlag == False and rFlag == True:
-                    recQual.letter_annotations["phred_quality"] = recQual.letter_annotations["phred_quality"][endPosListF[0] + 1: -1]\
-                                                              + [float(x) for x in str('0'*(len(recQual.letter_annotations["phred_quality"])\
-                                                              - len(recQual.letter_annotations["phred_quality"][endPosListF[0] + 1: -1\
-                                                              ])))]
+                    recQual.letter_annotations["phred_quality"] = recQual.letter_annotations["phred_quality"][endPosListF[0] + 1: -1] + [float(x) for x in str('0'*(len(recQual.letter_annotations["phred_quality"]) - len(recQual.letter_annotations["phred_quality"][endPosListF[0] + 1: -1])))]
 
             recordsQual[j] = recQual
 
