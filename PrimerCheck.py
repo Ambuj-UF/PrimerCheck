@@ -1,5 +1,5 @@
 ################################################################################################################
-# Tool for mapping primers and annotating fasta and fastq sequences                                            #
+# Tool for mapping primers and annotating fasta and fastq sequences. It can run on MPI based platform          #
 #                                                                                                              #
 # Copyright (C) {2014}  {Ambuj Kumar, Kimball-Braun lab group, Biology Department, University of Florida}      #
 #                                                                                                              #
@@ -23,9 +23,14 @@
 import os
 import re
 import glob
+import timeit
+import random
+import string
 import argparse
 import textwrap
 import UserString
+import multiprocessing
+from multiprocessing import *
 from Bio import SeqIO
 from Bio.Blast.Applications import NcbiblastxCommandline
 
@@ -45,11 +50,6 @@ parser = argparse.ArgumentParser(prog='PrimerCheck',
 
 group = parser.add_mutually_exclusive_group()
 
-
-group.add_argument('-mut', action='store_true', default=False,
-                    help='Run to create primer sequences from ambiguos input primer sequence. Use python PrimerCheck.py -mut -i input.fas -o output.fas')
-parser.add_argument('-i', type=str, required = True, help='Enter input primer file name')
-parser.add_argument('-o', type=str, required = True, help='Enter output primer file name')
 group.add_argument('-fq', type=str, default = None, help='Enter fastq file name')
 group.add_argument('-fa', type=str, default = None,  help='Enter fasta file name')
 parser.add_argument('-frd', type=str, required = True, help='Enter forward primer file name')
@@ -60,12 +60,6 @@ parser.add_argument('-tag', action='store_true', default=False,
 parser.add_argument('-tfname', type=str, help='Enter blast tagfile')
 
 args = parser.parse_args()
-
-if args.mut == True and not args.i:
-    parser.error('-i argument is required in "-mut" mode.')
-
-if args.mut == True and not args.o:
-    parser.error('-o argument is required in "-mut" mode.')
 
 if args.fa == None and args.fq == None:
     parser.error('fasta or fastq input file required.')
@@ -88,57 +82,29 @@ if args.fq == True and not args.qual:
 if args.tag == True and not args.tfname:
     parser.error('-tfname argument is required in "-tag" mode.')
 
-groupDict = {'Y': ['C', 'T'],
-    'R': ['A', 'G'],
-    'N': ['A', 'C', 'T', 'G'],
-    'H': ['A', 'C', 'T'],
-    'D': ['A', 'G', 'T'],
-    'S': ['C', 'G'],
-    'M': ['A', 'C']
-}
+start = timeit.default_timer()
 
-def mutate(myList, group):
-    retSeqList = [] if group in myList[0] else myList
-    if not retSeqList:
-        for sequences in myList:
-            newSeqList = [sequences.replace(group, nuc, 1) for nuc in groupDict[group] if group in sequences]
-            if sequences.count(group) == 0:
-                retSeqList = newSeqList
-            else:
-                for inSeq in newSeqList:
-                    for nuc in groupDict[group]:
-                        if group in inSeq:
-                            newSeqList.append(inSeq.replace(group, nuc, 1))
-                for val in newSeqList:
-                    if group not in val:
-                        retSeqList.append(val)
-    
-    else:
-        pass
-    
-    return retSeqList
+output = multiprocessing.Queue()
+coreNum = multiprocessing.cpu_count()
 
-def mrun():
-    handle = open(args.i, 'rU')
-    records = list(SeqIO.parse(handle, 'fasta'))
+def datasplit(records):
+    """
+        Program to split data according to the number of available cores
+        @Input - List of sequence records
+        @Output - List of sublist with sequence data after splitting as per the number of cores.
+    """
     
-    newRecord = []; procRecord = []
-    
-    for rec in records:
-        sequence = str(rec.seq); myList = [sequence]
-        for groups in groupDict.keys():
-            myList = mutate(myList, groups)
-        
-        newRecord.append([SeqRecord(Seq(str(x), IUPACAmbiguousDNA()), id=rec.id + str(i), name=rec.id + str(i),\
-                                    description=rec.id + str(i)) for i, x in enumerate(myList)])
-    
-    for val in newRecord:
-        for inval in val:
-            procRecord.append(inval)
-    
-    with open(args.o, 'w') as fp:
-        SeqIO.write(procRecord, fp, 'fasta')
+    data = [[] for i in range(0, coreNum)]
+    totalData = len(records); numGroups = (totalData/coreNum) + 1
+    counter = 0
+    for i, rec in enumerate(records):
+        if i < numGroups*(counter+1):
+            data[counter].append(rec)
+        else:
+            counter = counter + 1
+            data[counter].append(rec)
 
+    return data
 
 
 def primerMatch(record, recordP, ptype):
@@ -176,14 +142,12 @@ def primerMatch(record, recordP, ptype):
             return record.annotations, startPosList, endPosList
 
 
-def blastxOR(BlastInput):
+def blastxOR(BlastInput, tagfile, initFlag, output):
     """Run BLASTX on OR database"""
-    if type(BlastInput) is str:
-        handleX = open(BlastInput, 'rU'); recordX = list(SeqIO.parse(handleX, 'fasta')); initFlag = False
-        tagfile = 'sequenceTag.txt'
-    elif type(BlastInput) is list:
-        recordX = BlastInput; newRecord = []; initFlag = True
-        tagfile = 'sequenceTagCheck.txt'
+    if initFlag == False:
+        recordX = BlastInput;
+    elif initFlag == True:
+        recordX = BlastInput; newRecord = []; negIDs = []
 
     try:
         os.mkdir('OR-Output')
@@ -213,16 +177,17 @@ def blastxOR(BlastInput):
                 
                     if re.search('<Hsp_evalue>', line) != None:
                         """Extract evalue"""
-                        line = line.strip(); line = line.rstrip();
+                        line = line.strip(); line = line.rstrip()
                         line = line.strip('<Hsp_evalue>'); line = line.strip('</')
                         e_val.append(line)
                         eFlag = True
                     
                     if re.search('<Hsp_query-frame>', line) != None and fcount < 1:
                         """Extract frame value"""
-                        line = line.strip(); line = line.rstrip();
-                        line = line.strip('<Hsp_query-frame>'); line = line.strip('</')
-                        if int(line) < 0:
+                        fcount = fcount + 1
+                        line = line.strip(); line = line.rstrip()
+                        line = int(line.split('>')[1].split('<')[0])
+                        if line < 0:
                             rec.seq = rec.seq.reverse_complement()
                             negFlag = True
             
@@ -235,113 +200,119 @@ def blastxOR(BlastInput):
                     
                 if initFlag == True and cFlag == True and eFlag == True:
                     newRecord.append(rec)
-
+                
                 if cFlag == False and initFlag == True and eFlag == False:
                     negIDs.append(rec.id)
-
+    
             os.remove("OR-Output/Result." + str(rec.id).split('/')[1])
 
     if initFlag == True:
-        return newRecord, negIDs
+        output.put(newRecord)
+    else:
+        output.put('Check')
 
 
 def main():
-    if args.mut == True:
-        mrun()
-    else:
-        if args.fq != None:
-            """Executes if Fastq input file supplied"""
-            file = args.fq
-            with open('sequences.fasta', 'w') as fp, open('RawQual.qual', 'w') as fq:
-                handle = open(file, 'rU')
-                print("Importing fastq file. This will take a while\n")
-                rec = list(SeqIO.parse(handle, 'fastq'))
-                print("FastQ file imported\n")
-                print("Writing Fasta and Qual data\n")
-                SeqIO.write(rec, fp, 'fasta'); SeqIO.write(rec, fq, 'qual')
+    if args.fq != None:
+        """Executes if Fastq input file supplied"""
+        file = args.fq
+        with open('sequences.fasta', 'w') as fp, open('RawQual.qual', 'w') as fq:
+            handle = open(file, 'rU')
+            print("Importing fastq file. This will take a while\n")
+            rec = list(SeqIO.parse(handle, 'fastq'))
+            print("FastQ file imported\n")
+            print("Writing Fasta and Qual data\n")
+            SeqIO.write(rec, fp, 'fasta'); SeqIO.write(rec, fq, 'qual')
         
-            print("All done. Now importing records\n")
-            handle = open('sequences.fasta', 'rU'); records = list(SeqIO.parse(handle, 'fasta'))
-            #handleQual = open('RawQual.qual', 'rU'); recordsQual = list(SeqIO.parse(handleQual, 'qual'))
+        print("All done. Now importing records\n")
+        handle = open('sequences.fasta', 'rU'); records = list(SeqIO.parse(handle, 'fasta'))
+        handleQual = open('RawQual.qual', 'rU'); recordsQual = list(SeqIO.parse(handleQual, 'qual'))
 
-        elif args.fa != None:
-            """Executes if Fasta input file supplied"""
-            handle = open(args.fa, 'rU'); records = list(SeqIO.parse(handle, 'fasta'))
+    elif args.fa != None:
+        """Executes if Fasta input file supplied"""
+        handle = open(args.fa, 'rU'); records = list(SeqIO.parse(handle, 'fasta'))
+#        handleQual = open(args.qual, 'rU'); # recordsQual = list(SeqIO.parse(handleQual, 'qual'))
 
-        handleF = open(args.frd, 'rU'); recordF = list(SeqIO.parse(handleF, 'fasta'))
-        handleR = open(args.rev, 'rU'); recordR = list(SeqIO.parse(handleR, 'fasta'))
+    handleF = open(args.frd, 'rU'); recordF = list(SeqIO.parse(handleF, 'fasta'))
+    handleR = open(args.rev, 'rU'); recordR = list(SeqIO.parse(handleR, 'fasta'))
 
-        posDict = dict()
+    posDict = dict()
 
-        if args.tag == True:
-            print("Removing non-OR sequences from the input file\n")
-            fopen = open(args.tfname, 'r')
-            tagData = fopen.readlines()
-            noneIds = [lines.split(' : ')[0] for lines in tagData if 'OR = False' in lines]
-            records = [x for x in records if x.id not in noneIds]
-            negFrameSeq = [lines.split(' : ')[0] for lines in tagData if 'Frame = Negative' in lines]
-            for i, rec in enumerate(records):
-                if rec.id in negFrameSeq:
-                    rec.seq = rec.seq.reverse_complement()
-                records[i] = rec
+    print("Running initial Blastx scan...\n")
+    listRecords = datasplit(records)
+    processes = [multiprocessing.Process(target=blastxOR, args=(listRecords[x], 'sequenceTagCheck' + str(x) + '.txt', True, output)) for x in range(coreNum)]
+    for p in processes:
+        p.start()
+    for p in processes:
+        p.join()
+    records = [output.get() for p in processes]
+    newrecords = []
+    for reclist in records:
+        for rec in reclist:
+            newrecords.append(rec)
+    records = newrecords
+    print("Initial blastx scan completed!\n")
 
-        else:
-            print("Running initial Blastx scan...\n")
-            records, negIDs = blastxOR(records)
-            print("Initial blastx scan completed!\n")
+    print("Initiating primer mapping module\n")
 
-        print("Initiating primer mapping module\n")
+    for i, val in enumerate(records):
+        fFlag = False; rFlag = False
+        try:
+            fpAnnotate, startPosListF, endPosListF = primerMatch(val, recordF, 'forward')
+        except TypeError:
+            fFlag = True
+            endPosListF = ['NA']
 
-        for i, val in enumerate(records):
-            fFlag = False; rFlag = False
-            try:
-                fpAnnotate, startPosListF, endPosListF = primerMatch(val, recordF, 'forward')
-            except TypeError:
-                fFlag = True
-                endPosListF = ['NA']
+        try:
+            rpAnnotate, startPosListR, endPosListR = primerMatch(val, recordR, 'reverse')
+        except TypeError:
+            startPosListR = ['NA']
+            rFlag = True
 
-            try:
-                rpAnnotate, startPosListR, endPosListR = primerMatch(val, recordR, 'reverse')
-            except TypeError:
-                startPosListR = ['NA']
-                rFlag = True
+        posDict[val.id] = ([endPosListF[0], startPosListR[-1], len(val.seq)])
 
-            posDict[val.id] = ([endPosListF[0], startPosListR[-1], len(val.seq)])
-
-            if fFlag == False and rFlag == False:
-                if endPosListF[0]/len(val.seq) < 0.7:
-                    records[i].seq = val.seq[endPosListF[0] + 1: startPosListR[-1]]
-                else:
-                    records[i].seq = val.seq[endPosListR[0] + 1: startPosListF[-1]]
-            elif fFlag == True and rFlag == False:
-                if startPosListR[-1]/len(val.seq) < 0.7:
-                    records[i].seq = val.seq[endPosListR[0] + 1: -1]
-                else:
-                    records[i].seq = val.seq[0: startPosListR[-1]]
-            elif fFlag == False and rFlag == True:
-                if endPosListF[0]/len(val.seq) < 0.7:
-                    records[i].seq = val.seq[endPosListF[0] + 1: -1]
-                else:
-                    records[i].seq = val.seq[0: startPosListF[-1]]
+        if fFlag == False and rFlag == False:
+            if endPosListF[0]/len(val.seq) < 0.7:
+                records[i].seq = val.seq[endPosListF[0] + 1: startPosListR[-1]]
             else:
-                pass
+                records[i].seq = val.seq[endPosListR[0] + 1: startPosListF[-1]]
+        elif fFlag == True and rFlag == False:
+            if startPosListR[-1]/len(val.seq) < 0.7:
+                records[i].seq = val.seq[endPosListR[0] + 1: -1]
+            else:
+                records[i].seq = val.seq[0: startPosListR[-1]]
+        elif fFlag == False and rFlag == True:
+            if endPosListF[0]/len(val.seq) < 0.7:
+                records[i].seq = val.seq[endPosListF[0] + 1: -1]
+            else:
+                records[i].seq = val.seq[0: startPosListF[-1]]
+        else:
+            pass
 
-        print("Primer mapping done!!\n")
+    print("Primer mapping done!!\n")
 
 
-        with open('BlastInput.fas', 'w') as fp:
-            SeqIO.write(records, fp, 'fasta')
+    with open('BlastInput.fas', 'w') as fp:
+        SeqIO.write(records, fp, 'fasta')
 
-        with open('Annotations.txt', 'w') as fp:
-            for val in records:
-                fp.write('%s: %s\t\t%s\t\t%s\t\t%s\n' %(val.id, val.annotations, posDict[val.id][0], posDict[val.id][1], posDict[val.id][2]))
-
-
-        print("Initiating second stage blastx search\n")
-        blastxOR('BlastInput.fas')
-        print("All Done. OR tags are stored in sequenceTag.txt file\n")
+    with open('Annotations.txt', 'w') as fp:
+        for val in records:
+            fp.write('%s: %s\t\t%s\t\t%s\t\t%s\n' %(val.id, val.annotations, posDict[val.id][0], posDict[val.id][1], posDict[val.id][2]))
 
 
+    print("Initiating second stage blastx search\n")
+    handleTwo = open('BlastInput.fas', 'rU'); records2 = list(SeqIO.parse(handleTwo, 'fasta'))
+    newrecords2 = datasplit(records2)
+    processes = [multiprocessing.Process(target=blastxOR, args=(newrecords2[x], 'sequenceTag' + str(x) + '.txt', False, output)) for x in range(coreNum)]
+    for p in processes:
+        p.start()
+    for p in processes:
+        p.join()
+    collect = [output.get() for p in processes]
+    print("All Done. OR tags are stored in sequenceTag.txt file\n")
+
+    stop = timeit.default_timer()
+    print("Time taken = %s" %stop - start)
                    
 if __name__ == "__main__":
     main()
