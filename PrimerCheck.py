@@ -205,7 +205,7 @@ def blastxOR(BlastInput):
                    
             """Parse Blast output"""
             with open('OR-Output/Result.' + str(rec.id).split('/')[1],'r') as xml:
-                cFlag = False; eFlag = False; e_val = []; negFlag = False
+                cFlag = False; eFlag = False; e_val = []; negFlag = False; fcount = 0
                 for line in xml:
                     if re.search('No hits found', line) == None:
                         """Check if the sequence belong to OR group"""
@@ -218,7 +218,7 @@ def blastxOR(BlastInput):
                         e_val.append(line)
                         eFlag = True
                     
-                    if re.search('<Hsp_query-frame>', line) != None:
+                    if re.search('<Hsp_query-frame>', line) != None and fcount < 1:
                         """Extract frame value"""
                         line = line.strip(); line = line.rstrip();
                         line = line.strip('<Hsp_query-frame>'); line = line.strip('</')
@@ -233,9 +233,12 @@ def blastxOR(BlastInput):
                 else:
                     fp.write("%s : OR = False\n"%rec.id)
                     
-                if initFlag == True and cFlag == True:
+                if initFlag == True and cFlag == True and eFlag == True:
                     newRecord.append(rec)
-    
+
+                if cFlag == False and initFlag == True and eFlag == False:
+                    negIDs.append(rec.id)
+
             os.remove("OR-Output/Result." + str(rec.id).split('/')[1])
 
     if initFlag == True:
@@ -259,7 +262,7 @@ def main():
         
             print("All done. Now importing records\n")
             handle = open('sequences.fasta', 'rU'); records = list(SeqIO.parse(handle, 'fasta'))
-            handleQual = open('RawQual.qual', 'rU'); recordsQual = list(SeqIO.parse(handleQual, 'qual'))
+            #handleQual = open('RawQual.qual', 'rU'); recordsQual = list(SeqIO.parse(handleQual, 'qual'))
 
         elif args.fa != None:
             """Executes if Fasta input file supplied"""
