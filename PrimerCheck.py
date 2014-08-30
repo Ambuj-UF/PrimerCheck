@@ -26,7 +26,10 @@ import glob
 import argparse
 import textwrap
 import UserString
+import pylab as pl
+import numpy as np
 from Bio import SeqIO
+from collections import defaultdict
 from Bio.Blast.Applications import NcbiblastxCommandline
 
 
@@ -49,7 +52,6 @@ group.add_argument('-fq', type=str, default = None, help='Enter fastq file name'
 group.add_argument('-fa', type=str, default = None,  help='Enter fasta file name')
 parser.add_argument('-frd', type=str, required = True, help='Enter forward primer file name')
 parser.add_argument('-rev', type=str, required = True, help='Enter reverse primer file name')
-parser.add_argument('-qual', type=str, help='Enter quality data file name')
 parser.add_argument('-tag', action='store_true', default=False,
                     help='Use only if intial blastx tagfile output is available in the directory')
 parser.add_argument('-tfname', type=str, help='Enter blast tagfile')
@@ -65,14 +67,8 @@ if args.fa == True and not args.frd:
 if args.fa == True and not args.rev:
     parser.error('-rev argument is required in "-fa" mode.')
 
-if args.fa == True and not args.qual:
-    parser.error('-qual argument is required in "-fa" mode.')
-
 if args.fq == True and not args.frd:
     parser.error('-frd argument is required in "-fa" mode.')
-
-if args.fq == True and not args.qual:
-    parser.error('-rev argument is required in "-fq" mode.')
 
 if args.tag == True and not args.tfname:
     parser.error('-tfname argument is required in "-tag" mode.')
@@ -197,15 +193,20 @@ def main():
         
         print("All done. Now importing records\n")
         handle = open('sequences.fasta', 'rU'); records = list(SeqIO.parse(handle, 'fasta'))
-        handleQual = open('RawQual.qual', 'rU'); recordsQual = list(SeqIO.parse(handleQual, 'qual'))
 
     elif args.fa != None:
         """Executes if Fasta input file supplied"""
         handle = open(args.fa, 'rU'); records = list(SeqIO.parse(handle, 'fasta'))
-#        handleQual = open(args.qual, 'rU'); # recordsQual = list(SeqIO.parse(handleQual, 'qual'))
 
     handleF = open(args.frd, 'rU'); recordF = list(SeqIO.parse(handleF, 'fasta'))
     handleR = open(args.rev, 'rU'); recordR = list(SeqIO.parse(handleR, 'fasta'))
+
+    if "/" not in records[0].id:
+        for i, rec in enumerate(records):
+            records[i].id = records[i].id + '/' + str(i)
+        with open(args.fa.split('.')[0] + '_Edited.txt', 'w') as fp:
+            SeqIO.write(records, fp, 'fasta')
+        print("Your input sequence IDs has been changed. Please check %s_Edited.txt file for new sequence IDs\n\n" %args.fa.split('.')[0])
 
     posDict = dict()
 
@@ -264,33 +265,8 @@ def main():
 
     print("Primer mapping done!!\n")
 
-
-#        for j, recQual in enumerate(recordsQual):
-#            if recQual.id == records[i].id:
-#                if fFlag == False and rFlag == False:
-#                    recQual.letter_annotations["phred_quality"] = recQual.letter_annotations["phred_quality"][endPosListF[0] + 1: startPosListR[-1]]\
-#                                                              + [float(x) for x in str('0'*(len(recQual.letter_annotations["phred_quality"])\
-#                                                              - len(recQual.letter_annotations["phred_quality"][endPosListF[0] + 1: startPosListR[-1]\
-#                                                              ])))]
-#                elif fFlag == True and rFlag == False:
-#                    recQual.letter_annotations["phred_quality"] = recQual.letter_annotations["phred_quality"][0: startPosListR[-1]]\
-#                                                              + [float(x) for x in str('0'*(len(recQual.letter_annotations["phred_quality"])\
-#                                                              - len(recQual.letter_annotations["phred_quality"][0: startPosListR[-1]\
-#                                                              ])))]
-#                elif fFlag == False and rFlag == True:
-#                    recQual.letter_annotations["phred_quality"] = recQual.letter_annotations["phred_quality"][endPosListF[0] + 1: -1]\
-#                                                              + [float(x) for x in str('0'*(len(recQual.letter_annotations["phred_quality"])\
-#                                                              - len(recQual.letter_annotations["phred_quality"][endPosListF[0] + 1: -1\
-#                                                              ])))]
-#
-#            recordsQual[j] = recQual
-#
-#        if rFlag == False:
-#            records[i].annotations.update(dict(rpAnnotate.items()))
-
-    with open('BlastInput.fas', 'w') as fp: #open('ProcessedQual.qual', 'w') as fq:
+    with open('BlastInput.fas', 'w') as fp:
         SeqIO.write(records, fp, 'fasta')
-#        SeqIO.write(recordsQual, fq, 'qual')
 
     with open('Annotations.txt', 'w') as fp:
         for val in records:
@@ -302,7 +278,61 @@ def main():
     print("All Done. OR tags are stored in sequenceTag.txt file\n")
 
 
-                   
+    filesPre = [x for x in glob.glob('*.txt') if 'sequenceTagCheck' in x]
+    filesPost = [x for x in glob.glob('*.txt') if 'sequenceTag' in x]
+
+    evalPre = []; evalPost = []
+    for fnamePre, fnamePost in zip(filesPre, filesPost):
+        dataPre = open(fnamePre, 'r').readlines(); dataPost = open(fnamePost, 'r').readlines()
+        for linesPre, linesPost in zip(dataPre, dataPost):
+            if 'evalue' in linesPre:
+                evalPre.append(float(linesPre.split(',')[1].split(' = ')[1]))
+            if 'evalue' in linesPost:
+                evalPost.append(float(linesPost.split(',')[1].split(' = ')[1]))
+
+    preDict = defaultdict(list); postDict = defaultdict(list)
+    dictionaries = {'pre': preDict, 'post': postDict}
+
+    preDict['10-30'] = 0; preDict['30-50'] = 0; preDict['50-100'] = 0; preDict['100-above'] = 0
+    postDict['10-30'] = 0; postDict['30-50'] = 0; postDict['50-100'] = 0; postDict['100-above'] = 0
+
+    with open('EvalPre.txt', 'w') as fp, open('EvalPost.txt', 'w') as fq:
+        for val1, val2 in zip(evalPre, evalPost):
+            fp.write('%s\n' %val1); fq.write('%s\n' %val2)
+            if val1 <= float(1e-10) and val1 > float(1e-30):
+                preDict['10-30'] = preDict['10-30'] + 1
+            elif val1 <= float(1e-30) and val1 > float(1e-50):
+                preDict['30-50'] = preDict['30-50'] + 1
+            elif val1 <= float(1e-50) and val1 > float(1e-100):
+                preDict['50-100'] = preDict['50-100'] + 1
+            elif val1 <= float(1e-100):
+                preDict['100-above'] = preDict['100-above'] + 1
+            if val2 <= float(1e-10) and val2 > float(1e-30):
+                postDict['10-30'] = postDict['10-30'] + 1
+            elif val2 <= float(1e-30) and val2 > float(1e-50):
+                postDict['30-50'] = postDict['30-50'] + 1
+            elif val2 <= float(1e-50) and val2 > float(1e-100):
+                postDict['50-100'] = postDict['50-100'] + 1
+            elif val2 <= float(1e-100):
+                postDict['100-above'] = postDict['100-above'] + 1
+
+    for key, val in dictionaries.items():
+        total = 0
+        for inkey, inval in val.items():
+            total = total + inval
+        print key, total
+
+    for key, d in dictionaries.items():
+        fileName = "Plot_%s.png" %(key)
+        X = np.arange(len(d))
+        pl.bar(X, d.values(), align='center', width=0.5)
+        pl.xticks(X, d.keys())
+        ymax = max(d.values()) + 1
+        pl.ylim(0, ymax)
+        pl.savefig(fileName, format='png')
+        pl.clf()
+
+
 if __name__ == "__main__":
     main()
 
