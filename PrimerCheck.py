@@ -122,7 +122,9 @@ def blastxOR(BlastInput):
         os.mkdir('OR-Output')
     except OSError:
         pass
-                   
+
+    seqList1 = []; seqList2 = []; seqList3 = []
+
     with open(tagfile, 'w') as fp:
         for i, rec in enumerate(recordX):
             stringNuc = ''
@@ -150,6 +152,10 @@ def blastxOR(BlastInput):
                         line = line.strip('<Hsp_evalue>'); line = line.strip('</')
                         e_val.append(line)
                         eFlag = True
+                        if initFlag == False:
+                            seqList1.append(rec) if float(1e-30) <= float(line) < float(1e-10) else None
+                            seqList2.append(rec) if float(1e-50) <= float(line) < float(1e-30) else None
+                            seqList2.append(rec) if float(line) < float(1e-50) else None
                     
                     if re.search('<Hsp_query-frame>', line) != None and fcount < 1:
                         """Extract frame value"""
@@ -174,6 +180,10 @@ def blastxOR(BlastInput):
                     negIDs.append(rec.id)
     
             os.remove("OR-Output/Result." + str(rec.id).split('/')[1])
+
+    if initFlag == False:
+        with open('seq_e_val_10-30.fas', 'r') as fp, open('seq_e_val_30-50.fas', 'r') as fq, open('seq_e_val_50-last.fas', 'r') as fr:
+            SeqIO.write(seqList1, fp, 'fasta'); SeqIO.write(seqList2, fq, 'fasta'); SeqIO.write(seqList3, fr, 'fasta')
 
     if initFlag == True:
         return newRecord, negIDs
@@ -252,14 +262,16 @@ def main():
                 records[i].seq = val.seq[endPosListR[0] + 1: startPosListF[-1]]
         elif fFlag == True and rFlag == False:
             if startPosListR[-1]/len(val.seq) < 0.7:
-                records[i].seq = val.seq[endPosListR[0] + 1: -1]
+                records[i].seq = val.seq[endPosListR[0] + 1: -25]
             else:
-                records[i].seq = val.seq[0: startPosListR[-1]]
+                records[i].seq = val.seq[24: startPosListR[-1]]
         elif fFlag == False and rFlag == True:
             if endPosListF[0]/len(val.seq) < 0.7:
-                records[i].seq = val.seq[endPosListF[0] + 1: -1]
+                records[i].seq = val.seq[endPosListF[0] + 1: -25]
             else:
-                records[i].seq = val.seq[0: startPosListF[-1]]
+                records[i].seq = val.seq[24: startPosListF[-1]]
+        elif fFlag == True and rFlag == True:
+            records[i].seq = val.seq[24: -25]
         else:
             pass
 
@@ -372,6 +384,16 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+
+
+
+
+
+
+
+
 
 
 
