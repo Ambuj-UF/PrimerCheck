@@ -74,13 +74,6 @@ if args.fq == True and not args.frd:
 if args.tag == True and not args.tfname:
     parser.error('-tfname argument is required in "-tag" mode.')
 
-folderName = args.fa.split(".")[0]
-
-try:
-    os.mkdir(folderName)
-except:
-    pass
-
 
 def primerMatch(record, recordP, ptype):
     
@@ -133,7 +126,7 @@ def blastxOR(BlastInput):
     
     seqList1 = []; seqList2 = []; seqList3 = []
     
-    with open(folderName + "/" + tagfile, 'w') as fp:
+    with open(tagfile, 'w') as fp:
         for i, rec in enumerate(recordX):
             stringNuc = ''
             for nuc in rec.seq:
@@ -196,7 +189,7 @@ def blastxOR(BlastInput):
         seqList1 = [x for x in set(seqList1)]
         seqList2 = [x for x in set(seqList2)]
         seqList3 = [x for x in set(seqList3)]
-        with open(folderName + '/seq_e_val_10-30.fas', 'w') as fp, open(folderName + '/seq_e_val_30-50.fas', 'w') as fq, open(folderName + '/seq_e_val_50-last.fas', 'w') as fr:
+        with open('seq_e_val_10-30.fas', 'w') as fp, open('seq_e_val_30-50.fas', 'w') as fq, open('seq_e_val_50-last.fas', 'w') as fr:
             SeqIO.write(seqList1, fp, 'fasta'); SeqIO.write(seqList2, fq, 'fasta'); SeqIO.write(seqList3, fr, 'fasta')
     
     if initFlag == True:
@@ -291,21 +284,21 @@ def main():
     
     print("Primer mapping done!!\n")
     
-    with open(folderName + 'BlastInput.fas', 'w') as fp:
+    with open('BlastInput.fas', 'w') as fp:
         SeqIO.write(records, fp, 'fasta')
     
-    with open(folderName + '/Annotations.txt', 'w') as fp:
+    with open('Annotations.txt', 'w') as fp:
         for val in records:
             fp.write('%s: %s\t\t%s\t\t%s\t\t%s\n' %(val.id, val.annotations, posDict[val.id][0], posDict[val.id][1], posDict[val.id][2]))
     
     
     print("Initiating second stage blastx search\n")
-    blastxOR(folderName + '/BlastInput.fas')
+    blastxOR('BlastInput.fas')
     print("All Done. OR tags are stored in sequenceTag.txt file\n")
     
     
-    filesPre = [x for x in glob.glob(folderName + '/*.txt') if 'sequenceTagCheck' in x]
-    filesPost = [x for x in glob.glob(folderName + '/*.txt') if 'sequenceTag' in x]
+    filesPre = [x for x in glob.glob('*.txt') if 'sequenceTagCheck' in x]
+    filesPost = [x for x in glob.glob('*.txt') if 'sequenceTag' in x]
     
     evalPre = []; evalPost = []
     for fnamePre, fnamePost in zip(filesPre, filesPost):
@@ -331,7 +324,7 @@ def main():
     postDict['130-140'] = 0; postDict['140-150'] = 0; postDict['150-160'] = 0; postDict['160-170'] = 0;
     postDict['170-180'] = 0; postDict['180-190'] = 0; postDict['190-200'] = 0;
     
-    with open(folderName + '/EvalPre.txt', 'w') as fp, open(folderName + '/EvalPost.txt', 'w') as fq:
+    with open('EvalPre.txt', 'w') as fp, open('EvalPost.txt', 'w') as fq:
         for val1, val2 in zip(evalPre, evalPost):
             fp.write('%s\n' %val1); fq.write('%s\n' %val2)
             preDict['10-20'] = preDict['10-20'] + 1 if val1 <= float(1e-10) and val1 > float(1e-20) else preDict['10-20']
@@ -402,7 +395,7 @@ def main():
         pl.xticks(fontsize=8, rotation=90)
         ymax = max(d.values()) + 1
         pl.ylim(0, ymax)
-        pl.savefig(folderName + '/' + fileName, format='png')
+        pl.savefig(fileName, format='png')
         pl.clf()
 
 
