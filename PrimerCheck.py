@@ -25,6 +25,7 @@ import re
 import glob
 import argparse
 import textwrap
+import collections
 import UserString
 import pylab as pl
 import numpy as np
@@ -85,13 +86,13 @@ def primerMatch(record, recordP, ptype):
             primerToUse = str(val.seq) if str(val.seq) in str(record.seq) or str(val.seq)[10:-1] in str(record.seq)\
                 else str(val.seq)[::-1] if str(val.seq)[::-1] in str(record.seq) or str(val.seq)[::-1][10:-1] in str(record.seq)\
                     else None
-
+        
         elif ptype == 'reverse':
             primerToUse = str(val.seq.reverse_complement()) if str(val.seq.reverse_complement()) in str(record.seq)\
                 or str(val.seq.reverse_complement())[0:15] in str(record.seq) else str(val.seq.reverse_complement())[::-1]\
                     if str(val.seq.reverse_complement())[::-1] in str(record.seq) or str(val.seq.reverse_complement())[::-1][0:15] in str(record.seq)\
                         else None
-
+        
         if primerToUse == None:
             continue
         else:
@@ -117,27 +118,27 @@ def blastxOR(BlastInput):
     elif type(BlastInput) is list:
         recordX = BlastInput; newRecord = []; initFlag = True; negIDs = []
         tagfile = 'sequenceTagCheck.txt'
-
+    
     try:
         os.mkdir('OR-Output')
     except OSError:
         pass
-
+    
     seqList1 = []; seqList2 = []; seqList3 = []
-
+    
     with open(tagfile, 'w') as fp:
         for i, rec in enumerate(recordX):
             stringNuc = ''
             for nuc in rec.seq:
                 stringNuc = stringNuc + nuc
-        
+            
             blastx_cline = NcbiblastxCommandline(db="ORaaseqs_gallus_taeniopygia.txt",\
-                                                evalue=0.0000000001, outfmt=5, out=("OR-Output/Result.%s"%rec.id.split('/')[1]))
+                                                 evalue=0.0000000001, outfmt=5, out=("OR-Output/Result.%s"%rec.id.split('/')[1]))
             try:
                 stdout, stderr = blastx_cline(stdin = stringNuc)
             except:
                 continue
-                   
+                                                 
             """Parse Blast output"""
             with open('OR-Output/Result.' + str(rec.id).split('/')[1],'r') as xml:
                 cFlag = False; eFlag = False; e_val = []; negFlag = False; fcount = 0
@@ -145,7 +146,7 @@ def blastxOR(BlastInput):
                     if re.search('No hits found', line) == None:
                         """Check if the sequence belong to OR group"""
                         cFlag = True
-                
+                                                         
                     if re.search('<Hsp_evalue>', line) != None:
                         """Extract evalue"""
                         line = line.strip(); line = line.rstrip()
@@ -153,10 +154,13 @@ def blastxOR(BlastInput):
                         e_val.append(line)
                         eFlag = True
                         if initFlag == False:
-                            seqList1.append(rec) if float(1e-30) <= float(line) < float(1e-10) else None
-                            seqList2.append(rec) if float(1e-50) <= float(line) < float(1e-30) else None
-                            seqList2.append(rec) if float(line) < float(1e-50) else None
-                    
+                            if float(1e-30) <= float(line) < float(1e-10):
+                                seqList1.append(rec)
+                            if float(1e-50) <= float(line) < float(1e-30):
+                                seqList2.append(rec)
+                            if float(line) < float(1e-50):
+                                seqList2.append(rec)
+                                                         
                     if re.search('<Hsp_query-frame>', line) != None and fcount < 1:
                         """Extract frame value"""
                         fcount = fcount + 1
@@ -165,26 +169,26 @@ def blastxOR(BlastInput):
                         if line < 0:
                             rec.seq = rec.seq.reverse_complement()
                             negFlag = True
-            
+                                                     
                 if cFlag == True and eFlag == True and negFlag == False:
                     fp.write("%s : OR = True, evalue = %s\n"%(rec.id, e_val[0]))
                 elif cFlag == True and eFlag == True and negFlag == True:
                     fp.write("%s : OR = True, evalue = %s, Frame = Negative\n"%(rec.id, e_val[0]))
                 else:
                     fp.write("%s : OR = False\n"%rec.id)
-                    
+                                                     
                 if initFlag == True and cFlag == True and eFlag == True:
                     newRecord.append(rec)
-                
+                                                     
                 if cFlag == False and initFlag == True and eFlag == False:
                     negIDs.append(rec.id)
+                                                 
+        os.remove("OR-Output/Result." + str(rec.id).split('/')[1])
     
-            os.remove("OR-Output/Result." + str(rec.id).split('/')[1])
-
     if initFlag == False:
-        with open('seq_e_val_10-30.fas', 'r') as fp, open('seq_e_val_30-50.fas', 'r') as fq, open('seq_e_val_50-last.fas', 'r') as fr:
+        with open('seq_e_val_10-30.fas', 'w') as fp, open('seq_e_val_30-50.fas', 'w') as fq, open('seq_e_val_50-last.fas', 'w') as fr:
             SeqIO.write(seqList1, fp, 'fasta'); SeqIO.write(seqList2, fq, 'fasta'); SeqIO.write(seqList3, fr, 'fasta')
-
+    
     if initFlag == True:
         return newRecord, negIDs
 
@@ -203,23 +207,23 @@ def main():
         
         print("All done. Now importing records\n")
         handle = open('sequences.fasta', 'rU'); records = list(SeqIO.parse(handle, 'fasta'))
-
+    
     elif args.fa != None:
         """Executes if Fasta input file supplied"""
         handle = open(args.fa, 'rU'); records = list(SeqIO.parse(handle, 'fasta'))
-
+    
     handleF = open(args.frd, 'rU'); recordF = list(SeqIO.parse(handleF, 'fasta'))
     handleR = open(args.rev, 'rU'); recordR = list(SeqIO.parse(handleR, 'fasta'))
-
+    
     if "/" not in records[0].id:
         for i, rec in enumerate(records):
             records[i].id = records[i].id + '/' + str(i)
         with open(args.fa.split('.')[0] + '_Edited.txt', 'w') as fp:
             SeqIO.write(records, fp, 'fasta')
         print("Your input sequence IDs has been changed. Please check %s_Edited.txt file for new sequence IDs\n\n" %args.fa.split('.')[0])
-
+    
     posDict = dict()
-
+    
     if args.tag == True:
         print("Removing non-OR sequences from the input file\n")
         fopen = open(args.tfname, 'r')
@@ -231,14 +235,14 @@ def main():
             if rec.id in negFrameSeq:
                 rec.seq = rec.seq.reverse_complement()
             records[i] = rec
-
+    
     else:
         print("Running initial Blastx scan...\n")
         records, negIDs = blastxOR(records)
         print("Initial blastx scan completed!\n")
-
+    
     print("Initiating primer mapping module\n")
-
+    
     for i, val in enumerate(records):
         fFlag = False; rFlag = False
         try:
@@ -246,15 +250,15 @@ def main():
         except TypeError:
             fFlag = True
             endPosListF = ['NA']
-
+        
         try:
             rpAnnotate, startPosListR, endPosListR = primerMatch(val, recordR, 'reverse')
         except TypeError:
             startPosListR = ['NA']
             rFlag = True
-
+        
         posDict[val.id] = ([endPosListF[0], startPosListR[-1], len(val.seq)])
-
+        
         if fFlag == False and rFlag == False:
             if endPosListF[0]/len(val.seq) < 0.7:
                 records[i].seq = val.seq[endPosListF[0] + 1: startPosListR[-1]]
@@ -274,25 +278,25 @@ def main():
             records[i].seq = val.seq[24: -25]
         else:
             pass
-
+    
     print("Primer mapping done!!\n")
-
+    
     with open('BlastInput.fas', 'w') as fp:
         SeqIO.write(records, fp, 'fasta')
-
+    
     with open('Annotations.txt', 'w') as fp:
         for val in records:
             fp.write('%s: %s\t\t%s\t\t%s\t\t%s\n' %(val.id, val.annotations, posDict[val.id][0], posDict[val.id][1], posDict[val.id][2]))
-
-
+    
+    
     print("Initiating second stage blastx search\n")
     blastxOR('BlastInput.fas')
     print("All Done. OR tags are stored in sequenceTag.txt file\n")
-
-
+    
+    
     filesPre = [x for x in glob.glob('*.txt') if 'sequenceTagCheck' in x]
     filesPost = [x for x in glob.glob('*.txt') if 'sequenceTag' in x]
-
+    
     evalPre = []; evalPost = []
     for fnamePre, fnamePost in zip(filesPre, filesPost):
         dataPre = open(fnamePre, 'r').readlines(); dataPost = open(fnamePost, 'r').readlines()
@@ -301,22 +305,22 @@ def main():
                 evalPre.append(float(linesPre.split(',')[1].split(' = ')[1]))
             if 'evalue' in linesPost:
                 evalPost.append(float(linesPost.split(',')[1].split(' = ')[1]))
-
+    
     preDict = defaultdict(list); postDict = defaultdict(list)
     dictionaries = {'pre': preDict, 'post': postDict}
-
+    
     preDict['10-20'] = 0; preDict['20-30'] = 0; preDict['30-40'] = 0; preDict['40-50'] = 0;
     preDict['50-60'] = 0; preDict['60-70'] = 0; preDict['70-80'] = 0; preDict['80-90'] = 0;
     preDict['90-100'] = 0; preDict['100-110'] = 0; preDict['110-120'] = 0; preDict['120-130'] = 0;
     preDict['130-140'] = 0; preDict['140-150'] = 0; preDict['150-160'] = 0; preDict['160-170'] = 0;
     preDict['170-180'] = 0; preDict['180-190'] = 0; preDict['190-200'] = 0;
-
+    
     postDict['10-20'] = 0; postDict['20-30'] = 0; postDict['30-40'] = 0; postDict['40-50'] = 0;
     postDict['50-60'] = 0; postDict['60-70'] = 0; postDict['70-80'] = 0; postDict['80-90'] = 0;
     postDict['90-100'] = 0; postDict['100-110'] = 0; postDict['110-120'] = 0; postDict['120-130'] = 0;
     postDict['130-140'] = 0; postDict['140-150'] = 0; postDict['150-160'] = 0; postDict['160-170'] = 0;
     postDict['170-180'] = 0; postDict['180-190'] = 0; postDict['190-200'] = 0;
-
+    
     with open('EvalPre.txt', 'w') as fp, open('EvalPost.txt', 'w') as fq:
         for val1, val2 in zip(evalPre, evalPost):
             fp.write('%s\n' %val1); fq.write('%s\n' %val2)
@@ -340,7 +344,7 @@ def main():
             preDict['170-180'] = preDict['170-180'] + 1 if val1 <= float(1e-170) and val1 > float(1e-180) else preDict['170-180']
             preDict['180-190'] = preDict['180-190'] + 1 if val1 <= float(1e-180) and val1 > float(1e-190) else preDict['180-190']
             preDict['190-200'] = preDict['190-200'] + 1 if val1 <= float(1e-190) and val1 > float(1e-200) else preDict['190-200']
-        
+            
             postDict['10-20'] = postDict['10-20'] + 1 if val2 <= float(1e-10) and val2 > float(1e-20) else postDict['10-20']
             postDict['20-30'] = postDict['20-30'] + 1 if val2 <= float(1e-20) and val2 > float(1e-30) else postDict['20-30']
             postDict['30-40'] = postDict['30-40'] + 1 if val2 <= float(1e-30) and val2 > float(1e-40) else postDict['30-40']
@@ -361,17 +365,27 @@ def main():
             postDict['170-180'] = postDict['170-180'] + 1 if val2 <= float(1e-170) and val2 > float(1e-180) else postDict['170-180']
             postDict['180-190'] = postDict['180-190'] + 1 if val2 <= float(1e-180) and val2 > float(1e-190) else postDict['180-190']
             postDict['190-200'] = postDict['190-200'] + 1 if val2 <= float(1e-190) and val2 > float(1e-200) else postDict['190-200']
-
-
+    
+    
     for key, val in dictionaries.items():
         total = 0
         for inkey, inval in val.items():
             total = total + inval
         print key, total
 
+    def dictUpdate(dictData):
+        for key, val in dictData.items():
+            dictData[int(key.split('-')[0])] = dictData.pop(key)
+        dictData = collections.OrderedDict(sorted(dictData.items()))
+        return dictData
 
+    preDict = dictUpdate(preDict)
+    postDict = dictUpdate(postDict)
+    
+    
     for key, d in dictionaries.items():
         fileName = "Plot_%s.png" %(key)
+        d = collections.OrderedDict(sorted(d.items()))
         X = np.arange(len(d))
         pl.bar(X, d.values(), align='center', width=0.5)
         pl.xticks(X, sorted(d.keys()))
@@ -384,14 +398,6 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
-
-
-
-
-
-
 
 
 
