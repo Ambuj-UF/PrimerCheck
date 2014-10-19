@@ -153,14 +153,7 @@ def blastxOR(BlastInput):
                         line = line.strip('<Hsp_evalue>'); line = line.strip('</')
                         e_val.append(line)
                         eFlag = True
-                        if initFlag == False:
-                            if float(1e-30) <= float(line) < float(1e-10):
-                                seqList1.append(rec)
-                            if float(1e-50) <= float(line) < float(1e-30):
-                                seqList2.append(rec)
-                            if float(line) < float(1e-50):
-                                seqList2.append(rec)
-                                                         
+                            
                     if re.search('<Hsp_query-frame>', line) != None and fcount < 1:
                         """Extract frame value"""
                         fcount = fcount + 1
@@ -169,7 +162,15 @@ def blastxOR(BlastInput):
                         if line < 0:
                             rec.seq = rec.seq.reverse_complement()
                             negFlag = True
-                                                     
+            
+                if initFlag == False:
+                    if float(1e-30) <= float(e_val[0]) < float(1e-10):
+                        seqList1.append(rec)
+                    if float(1e-50) <= float(e_val[0]) < float(1e-30):
+                        seqList2.append(rec)
+                    if float(e_val[0]) < float(1e-50):
+                        seqList3.append(rec)
+            
                 if cFlag == True and eFlag == True and negFlag == False:
                     fp.write("%s : OR = True, evalue = %s\n"%(rec.id, e_val[0]))
                 elif cFlag == True and eFlag == True and negFlag == True:
@@ -183,7 +184,7 @@ def blastxOR(BlastInput):
                 if cFlag == False and initFlag == True and eFlag == False:
                     negIDs.append(rec.id)
                                                  
-        os.remove("OR-Output/Result." + str(rec.id).split('/')[1])
+            os.remove("OR-Output/Result." + str(rec.id).split('/')[1])
     
     if initFlag == False:
         seqList1 = [x for x in set(seqList1)]
@@ -210,6 +211,7 @@ def main():
         
         print("All done. Now importing records\n")
         handle = open('sequences.fasta', 'rU'); records = list(SeqIO.parse(handle, 'fasta'))
+        handleQ = open('RawQual.qual', 'rU'); recordsQ = SeqIO.to_dict(SeqIO.parse(handleQ, 'qual'))
     
     elif args.fa != None:
         """Executes if Fasta input file supplied"""
@@ -247,6 +249,7 @@ def main():
     print("Initiating primer mapping module\n")
     
     for i, val in enumerate(records):
+        print("Running analysis for -> %s\n"%rec.id)
         fFlag = False; rFlag = False
         try:
             fpAnnotate, startPosListF, endPosListF = primerMatch(val, recordF, 'forward')
@@ -265,27 +268,52 @@ def main():
         if fFlag == False and rFlag == False:
             if endPosListF[0]/len(val.seq) < 0.7:
                 records[i].seq = val.seq[endPosListF[0] + 1: startPosListR[-1]]
+                annotData = recordsQ[rec.id].letter_annotations["phred_quality"][endPosListF[0] + 1: startPosListR[-1]]
+                recordsQ[rec.id].letter_annotations.pop("phred_quality")
+                recordsQ[i].seq = val.seq[endPosListF[0] + 1: startPosListR[-1]]
+                recordsQ[rec.id].letter_annotations["phred_quality"] = annotData
             else:
                 records[i].seq = val.seq[endPosListR[0] + 1: startPosListF[-1]]
+                annotData = recordsQ[rec.id].letter_annotations["phred_quality"][endPosListR[0] + 1: startPosListF[-1]]
+                recordsQ[rec.id].letter_annotations.pop("phred_quality")
+                recordsQ[i].seq = val.seq[endPosListR[0] + 1: startPosListF[-1]]
+                recordsQ[rec.id].letter_annotations["phred_quality"] = annotData
         elif fFlag == True and rFlag == False:
             if startPosListR[-1]/len(val.seq) < 0.7:
                 records[i].seq = val.seq[endPosListR[0] + 1: -25]
+                annotData = recordsQ[rec.id].letter_annotations["phred_quality"][endPosListR[0] + 1: -25]
+                recordsQ[rec.id].letter_annotations.pop("phred_quality")
+                recordsQ[i].seq = val.seq[endPosListR[0] + 1: -25]
+                recordsQ[rec.id].letter_annotations["phred_quality"] = annotData
             else:
                 records[i].seq = val.seq[24: startPosListR[-1]]
         elif fFlag == False and rFlag == True:
             if endPosListF[0]/len(val.seq) < 0.7:
                 records[i].seq = val.seq[endPosListF[0] + 1: -25]
+                annotData = recordsQ[rec.id].letter_annotations["phred_quality"][endPosListF[0] + 1: -25]
+                recordsQ[rec.id].letter_annotations.pop("phred_quality")
+                recordsQ[i].seq = val.seq[endPosListF[0] + 1: -25]
+                recordsQ[rec.id].letter_annotations["phred_quality"] = annotData
             else:
                 records[i].seq = val.seq[24: startPosListF[-1]]
+                annotData = recordsQ[rec.id].letter_annotations["phred_quality"][24: startPosListF[-1]]
+                recordsQ[rec.id].letter_annotations.pop("phred_quality")
+                recordsQ[i].seq = val.seq[24: startPosListF[-1]]
+                recordsQ[rec.id].letter_annotations["phred_quality"] = annotData
         elif fFlag == True and rFlag == True:
             records[i].seq = val.seq[24: -25]
+            annotData = recordsQ[rec.id].letter_annotations["phred_quality"][24: -25]
+            recordsQ[rec.id].letter_annotations.pop("phred_quality")
+            recordsQ[i].seq = val.seq[24: -25]
+            recordsQ[rec.id].letter_annotations["phred_quality"] = annotData
         else:
             pass
     
     print("Primer mapping done!!\n")
     
-    with open('BlastInput.fas', 'w') as fp:
+    with open('BlastInput.fas', 'w') as fp, open('FastqOutput.fq', 'w') as fq:
         SeqIO.write(records, fp, 'fasta')
+        SeqIO.write(recordsQ, fq, 'qual')
     
     with open('Annotations.txt', 'w') as fp:
         for val in records:
