@@ -312,7 +312,7 @@ def main():
     with open('EvalPre.txt', 'w') as fp, open('EvalPost.txt', 'w') as fq:
         for val1, val2 in zip(evalPre, evalPost):
             fp.write('%s\n' %val1); fq.write('%s\n' %val2)
-            x= x + 10
+            x =  10
             while x <= 190:
                 if val1 <= float('1e-' + str(x)) and val1 > float('1e-' + str(x+1)):
                     preDict[str(x) + '-' + str(x+1)] = preDict[str(x) + '-' + str(x+1)] + 1
