@@ -162,14 +162,7 @@ def blastxOR(BlastInput):
                         if line < 0:
                             rec.seq = rec.seq.reverse_complement()
                             negFlag = True
-            
-                if initFlag == False:
-                    if float(1e-30) <= float(e_val[0]) < float(1e-10):
-                        seqList1.append(rec)
-                    if float(1e-50) <= float(e_val[0]) < float(1e-30):
-                        seqList2.append(rec)
-                    if float(e_val[0]) < float(1e-50):
-                        seqList3.append(rec)
+
             
                 if cFlag == True and eFlag == True and negFlag == False:
                     fp.write("%s : OR = True, evalue = %s\n"%(rec.id, e_val[0]))
@@ -185,13 +178,7 @@ def blastxOR(BlastInput):
                     negIDs.append(rec.id)
                                                  
             os.remove("OR-Output/Result." + str(rec.id).split('/')[1])
-    
-    if initFlag == False:
-        seqList1 = [x for x in set(seqList1)]
-        seqList2 = [x for x in set(seqList2)]
-        seqList3 = [x for x in set(seqList3)]
-        with open('seq_e_val_10-30.fas', 'w') as fp, open('seq_e_val_30-50.fas', 'w') as fq, open('seq_e_val_50-last.fas', 'w') as fr:
-            SeqIO.write(seqList1, fp, 'fasta'); SeqIO.write(seqList2, fq, 'fasta'); SeqIO.write(seqList3, fr, 'fasta')
+
     
     if initFlag == True:
         return newRecord, negIDs
@@ -249,7 +236,7 @@ def main():
     print("Initiating primer mapping module\n")
     
     for i, val in enumerate(records):
-        print("Running analysis for -> %s\n"%rec.id)
+        print("Running analysis for -> %s\n"%val.id)
         fFlag = False; rFlag = False
         try:
             fpAnnotate, startPosListF, endPosListF = primerMatch(val, recordF, 'forward')
@@ -268,44 +255,20 @@ def main():
         if fFlag == False and rFlag == False:
             if endPosListF[0]/len(val.seq) < 0.7:
                 records[i].seq = val.seq[endPosListF[0] + 1: startPosListR[-1]]
-                annotData = recordsQ[rec.id].letter_annotations["phred_quality"][endPosListF[0] + 1: startPosListR[-1]]
-                recordsQ[rec.id].letter_annotations.pop("phred_quality")
-                recordsQ[i].seq = val.seq[endPosListF[0] + 1: startPosListR[-1]]
-                recordsQ[rec.id].letter_annotations["phred_quality"] = annotData
             else:
                 records[i].seq = val.seq[endPosListR[0] + 1: startPosListF[-1]]
-                annotData = recordsQ[rec.id].letter_annotations["phred_quality"][endPosListR[0] + 1: startPosListF[-1]]
-                recordsQ[rec.id].letter_annotations.pop("phred_quality")
-                recordsQ[i].seq = val.seq[endPosListR[0] + 1: startPosListF[-1]]
-                recordsQ[rec.id].letter_annotations["phred_quality"] = annotData
         elif fFlag == True and rFlag == False:
             if startPosListR[-1]/len(val.seq) < 0.7:
                 records[i].seq = val.seq[endPosListR[0] + 1: -25]
-                annotData = recordsQ[rec.id].letter_annotations["phred_quality"][endPosListR[0] + 1: -25]
-                recordsQ[rec.id].letter_annotations.pop("phred_quality")
-                recordsQ[i].seq = val.seq[endPosListR[0] + 1: -25]
-                recordsQ[rec.id].letter_annotations["phred_quality"] = annotData
             else:
                 records[i].seq = val.seq[24: startPosListR[-1]]
         elif fFlag == False and rFlag == True:
             if endPosListF[0]/len(val.seq) < 0.7:
                 records[i].seq = val.seq[endPosListF[0] + 1: -25]
-                annotData = recordsQ[rec.id].letter_annotations["phred_quality"][endPosListF[0] + 1: -25]
-                recordsQ[rec.id].letter_annotations.pop("phred_quality")
-                recordsQ[i].seq = val.seq[endPosListF[0] + 1: -25]
-                recordsQ[rec.id].letter_annotations["phred_quality"] = annotData
             else:
                 records[i].seq = val.seq[24: startPosListF[-1]]
-                annotData = recordsQ[rec.id].letter_annotations["phred_quality"][24: startPosListF[-1]]
-                recordsQ[rec.id].letter_annotations.pop("phred_quality")
-                recordsQ[i].seq = val.seq[24: startPosListF[-1]]
-                recordsQ[rec.id].letter_annotations["phred_quality"] = annotData
         elif fFlag == True and rFlag == True:
             records[i].seq = val.seq[24: -25]
-            annotData = recordsQ[rec.id].letter_annotations["phred_quality"][24: -25]
-            recordsQ[rec.id].letter_annotations.pop("phred_quality")
-            recordsQ[i].seq = val.seq[24: -25]
-            recordsQ[rec.id].letter_annotations["phred_quality"] = annotData
         else:
             pass
     
@@ -313,7 +276,7 @@ def main():
     
     with open('BlastInput.fas', 'w') as fp, open('FastqOutput.fq', 'w') as fq:
         SeqIO.write(records, fp, 'fasta')
-        SeqIO.write(recordsQ, fq, 'qual')
+        #SeqIO.write(recordsQ, fq, 'qual')
     
     with open('Annotations.txt', 'w') as fp:
         for val in records:
@@ -339,65 +302,24 @@ def main():
     
     preDict = defaultdict(list); postDict = defaultdict(list)
     dictionaries = {'pre': preDict, 'post': postDict}
-    
-    preDict['10-20'] = 0; preDict['20-30'] = 0; preDict['30-40'] = 0; preDict['40-50'] = 0;
-    preDict['50-60'] = 0; preDict['60-70'] = 0; preDict['70-80'] = 0; preDict['80-90'] = 0;
-    preDict['90-100'] = 0; preDict['100-110'] = 0; preDict['110-120'] = 0; preDict['120-130'] = 0;
-    preDict['130-140'] = 0; preDict['140-150'] = 0; preDict['150-160'] = 0; preDict['160-170'] = 0;
-    preDict['170-180'] = 0; preDict['180-190'] = 0; preDict['190-200'] = 0;
-    
-    postDict['10-20'] = 0; postDict['20-30'] = 0; postDict['30-40'] = 0; postDict['40-50'] = 0;
-    postDict['50-60'] = 0; postDict['60-70'] = 0; postDict['70-80'] = 0; postDict['80-90'] = 0;
-    postDict['90-100'] = 0; postDict['100-110'] = 0; postDict['110-120'] = 0; postDict['120-130'] = 0;
-    postDict['130-140'] = 0; postDict['140-150'] = 0; postDict['150-160'] = 0; postDict['160-170'] = 0;
-    postDict['170-180'] = 0; postDict['180-190'] = 0; postDict['190-200'] = 0;
+
+    x = 10
+    while x <= 190:
+        preDict[str(x) + '-' + str(x+1)] = 0
+        postDict[str(x) + '-' + str(x+1)] = 0
+        x = x + 10
     
     with open('EvalPre.txt', 'w') as fp, open('EvalPost.txt', 'w') as fq:
         for val1, val2 in zip(evalPre, evalPost):
             fp.write('%s\n' %val1); fq.write('%s\n' %val2)
-            preDict['10-20'] = preDict['10-20'] + 1 if val1 <= float(1e-10) and val1 > float(1e-20) else preDict['10-20']
-            preDict['20-30'] = preDict['20-30'] + 1 if val1 <= float(1e-20) and val1 > float(1e-30) else preDict['20-30']
-            preDict['30-40'] = preDict['30-40'] + 1 if val1 <= float(1e-30) and val1 > float(1e-40) else preDict['30-40']
-            preDict['40-50'] = preDict['40-50'] + 1 if val1 <= float(1e-40) and val1 > float(1e-50) else preDict['40-50']
-            preDict['50-60'] = preDict['50-60'] + 1 if val1 <= float(1e-50) and val1 > float(1e-60) else preDict['50-60']
-            preDict['60-70'] = preDict['60-70'] + 1 if val1 <= float(1e-60) and val1 > float(1e-70) else preDict['60-70']
-            preDict['70-80'] = preDict['70-80'] + 1 if val1 <= float(1e-70) and val1 > float(1e-80) else preDict['70-80']
-            preDict['80-90'] = preDict['80-90'] + 1 if val1 <= float(1e-80) and val1 > float(1e-90) else preDict['80-90']
-            preDict['90-100'] = preDict['90-100'] + 1 if val1 <= float(1e-90) and val1 > float(1e-100) else preDict['90-100']
-            preDict['100-110'] = preDict['100-110'] + 1 if val1 <= float(1e-100) and val1 > float(1e-110) else preDict['100-110']
-            preDict['110-120'] = preDict['110-120'] + 1 if val1 <= float(1e-110) and val1 > float(1e-120) else preDict['110-120']
-            preDict['120-130'] = preDict['120-130'] + 1 if val1 <= float(1e-120) and val1 > float(1e-130) else preDict['120-130']
-            preDict['130-140'] = preDict['130-140'] + 1 if val1 <= float(1e-130) and val1 > float(1e-140) else preDict['130-140']
-            preDict['140-150'] = preDict['140-150'] + 1 if val1 <= float(1e-140) and val1 > float(1e-150) else preDict['140-150']
-            preDict['150-160'] = preDict['150-160'] + 1 if val1 <= float(1e-150) and val1 > float(1e-160) else preDict['150-160']
-            preDict['160-170'] = preDict['160-170'] + 1 if val1 <= float(1e-160) and val1 > float(1e-170) else preDict['160-170']
-            preDict['160-170'] = preDict['160-170'] + 1 if val1 <= float(1e-160) and val1 > float(1e-170) else preDict['160-170']
-            preDict['170-180'] = preDict['170-180'] + 1 if val1 <= float(1e-170) and val1 > float(1e-180) else preDict['170-180']
-            preDict['180-190'] = preDict['180-190'] + 1 if val1 <= float(1e-180) and val1 > float(1e-190) else preDict['180-190']
-            preDict['190-200'] = preDict['190-200'] + 1 if val1 <= float(1e-190) and val1 > float(1e-200) else preDict['190-200']
-            
-            postDict['10-20'] = postDict['10-20'] + 1 if val2 <= float(1e-10) and val2 > float(1e-20) else postDict['10-20']
-            postDict['20-30'] = postDict['20-30'] + 1 if val2 <= float(1e-20) and val2 > float(1e-30) else postDict['20-30']
-            postDict['30-40'] = postDict['30-40'] + 1 if val2 <= float(1e-30) and val2 > float(1e-40) else postDict['30-40']
-            postDict['40-50'] = postDict['40-50'] + 1 if val2 <= float(1e-40) and val2 > float(1e-50) else postDict['40-50']
-            postDict['50-60'] = postDict['50-60'] + 1 if val2 <= float(1e-50) and val2 > float(1e-60) else postDict['50-60']
-            postDict['60-70'] = postDict['60-70'] + 1 if val2 <= float(1e-60) and val2 > float(1e-70) else postDict['60-70']
-            postDict['70-80'] = postDict['70-80'] + 1 if val2 <= float(1e-70) and val2 > float(1e-80) else postDict['70-80']
-            postDict['80-90'] = postDict['80-90'] + 1 if val2 <= float(1e-80) and val2 > float(1e-90) else postDict['80-90']
-            postDict['90-100'] = postDict['90-100'] + 1 if val2 <= float(1e-90) and val2 > float(1e-100) else postDict['90-100']
-            postDict['100-110'] = postDict['100-110'] + 1 if val2 <= float(1e-100) and val2 > float(1e-110) else postDict['100-110']
-            postDict['110-120'] = postDict['110-120'] + 1 if val2 <= float(1e-110) and val2 > float(1e-120) else postDict['110-120']
-            postDict['120-130'] = postDict['120-130'] + 1 if val2 <= float(1e-120) and val2 > float(1e-130) else postDict['120-130']
-            postDict['130-140'] = postDict['130-140'] + 1 if val2 <= float(1e-130) and val2 > float(1e-140) else postDict['130-140']
-            postDict['140-150'] = postDict['140-150'] + 1 if val2 <= float(1e-140) and val2 > float(1e-150) else postDict['140-150']
-            postDict['150-160'] = postDict['150-160'] + 1 if val2 <= float(1e-150) and val2 > float(1e-160) else postDict['150-160']
-            postDict['160-170'] = postDict['160-170'] + 1 if val2 <= float(1e-160) and val2 > float(1e-170) else postDict['160-170']
-            postDict['160-170'] = postDict['160-170'] + 1 if val2 <= float(1e-160) and val2 > float(1e-170) else postDict['160-170']
-            postDict['170-180'] = postDict['170-180'] + 1 if val2 <= float(1e-170) and val2 > float(1e-180) else postDict['170-180']
-            postDict['180-190'] = postDict['180-190'] + 1 if val2 <= float(1e-180) and val2 > float(1e-190) else postDict['180-190']
-            postDict['190-200'] = postDict['190-200'] + 1 if val2 <= float(1e-190) and val2 > float(1e-200) else postDict['190-200']
-    
-    
+            x= x + 10
+            while x <= 190:
+                if val1 <= float('1e-' + str(x)) and val1 > float('1e-' + str(x+1)):
+                    preDict[str(x) + '-' + str(x+1)] = preDict[str(x) + '-' + str(x+1)] + 1
+                if val2 <= float('1e-' + str(x)) and val2 > float('1e-' + str(x+1)):
+                    postDict[str(x) + '-' + str(x+1)] = postDict[str(x) + '-' + str(x+1)] + 1
+                x = x + 10
+
     for key, val in dictionaries.items():
         total = 0
         for inkey, inval in val.items():
