@@ -187,7 +187,7 @@ def blastxOR(BlastInput):
 
 
 
-def processOut(args.o):
+def processOut(outputFolder):
     recordsF1= list()
     recordsF2= list()
     recordsF3= list()
@@ -240,8 +240,8 @@ def processOut(args.o):
                 records[i].seq = records[i].seq[int(dataDictAnnot[rec.id]['Begening']): int(dataDictAnnot[rec.id]['End'])]
                 records[i].letter_annotations["phred_quality"] = annotData
                 newRecords.append(records[i])
-                except KeyError:
-                    continue
+            except KeyError:
+                continue
         
         return newRecords
     
@@ -282,16 +282,16 @@ def processOut(args.o):
     recordsQ3 = qualEdit(recordsQ3)
     
     try:
-        os.mkdir(args.o)
+        os.mkdir(outputFolder)
     except IOError:
         pass
     
-    with open(args.o + '/seq_e_val_10-30.qual', 'w') as fp, open(args.o + '/seq_e_val_30-50.qual', 'w') as fq, open(args.o + '/seq_e_val_50-last.qual', 'w') as fr:
+    with open(outputFolder + '/seq_e_val_10-30.qual', 'w') as fp, open(outputFolder + '/seq_e_val_30-50.qual', 'w') as fq, open(outputFolder + '/seq_e_val_50-last.qual', 'w') as fr:
         SeqIO.write(recordsQ1, fp, 'qual')
         SeqIO.write(recordsQ2, fq, 'qual')
         SeqIO.write(recordsQ3, fr, 'qual')
     
-    with open(args.o + '/seq_e_val_10-30.fasta', 'w') as fp, open(args.o + '/seq_e_val_30-50.fasta', 'w') as fq, open(args.o + '/seq_e_val_50-last.fasta', 'w') as fr:
+    with open(outputFolder + '/seq_e_val_10-30.fasta', 'w') as fp, open(outputFolder + '/seq_e_val_30-50.fasta', 'w') as fq, open(outputFolder + '/seq_e_val_50-last.fasta', 'w') as fr:
         SeqIO.write(recordsF1, fp, 'fasta')
         SeqIO.write(recordsF2, fq, 'fasta')
         SeqIO.write(recordsF3, fr, 'fasta')
@@ -300,7 +300,7 @@ def processOut(args.o):
     files = ['Sequences.fasta', 'RawQual.qual', 'sequenceTagCheck.txt', 'Annotations.txt', 'Plot_pre.png', 'Plot_post.png']
     
     for file in files:
-        shutil.copy2(files[i], args.o)
+        shutil.copy2(files[i], outputFolder)
     
     print("All Done\n")
 
