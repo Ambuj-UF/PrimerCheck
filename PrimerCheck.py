@@ -132,7 +132,7 @@ def blastxOR(BlastInput):
     toolbar_width = len(recordX)
     with open(tagfile, 'w') as fp:
         for i, rec in enumerate(recordX):
-            p = str(float(i)/toolbar_width)
+            p = str((float(i)/toolbar_width)*100)[:4]
             sys.stdout.write("\r%s%%" %p)
             sys.stdout.flush()
             
