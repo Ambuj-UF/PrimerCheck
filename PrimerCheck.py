@@ -22,14 +22,15 @@
 
 import os
 import re
+import sys
 import glob
+import shutil
 import argparse
 import textwrap
 import collections
 import UserString
 import pylab as pl
 import numpy as np
-import shutil
 from Bio import SeqIO
 from collections import defaultdict
 from Bio.Blast.Applications import NcbiblastxCommandline
@@ -127,9 +128,14 @@ def blastxOR(BlastInput):
         pass
     
     seqList1 = []; seqList2 = []; seqList3 = []
-    
+
+    toolbar_width = len(recordX)
     with open(tagfile, 'w') as fp:
         for i, rec in enumerate(recordX):
+            p = str(float(i)/toolbar_width)
+            sys.stdout.write("\r%s%%" %p)
+            sys.stdout.flush()
+            
             stringNuc = ''
             for nuc in rec.seq:
                 stringNuc = stringNuc + nuc
