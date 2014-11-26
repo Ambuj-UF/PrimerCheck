@@ -29,6 +29,7 @@ import collections
 import UserString
 import pylab as pl
 import numpy as np
+import shutil
 from Bio import SeqIO
 from collections import defaultdict
 from Bio.Blast.Applications import NcbiblastxCommandline
@@ -56,6 +57,7 @@ parser.add_argument('-rev', type=str, required = True, help='Enter reverse prime
 parser.add_argument('-tag', action='store_true', default=False,
                     help='Use only if intial blastx tagfile output is available in the directory')
 parser.add_argument('-tfname', type=str, help='Enter blast tagfile')
+parser.add_argument('-o', type=str, help='Enter output folder name')
 
 args = parser.parse_args()
 
@@ -184,6 +186,126 @@ def blastxOR(BlastInput):
         return newRecord, negIDs
 
 
+
+def processOut(args.o):
+    recordsF1= list()
+    recordsF2= list()
+    recordsF3= list()
+    recordsQ1= list()
+    recordsQ2= list()
+    recordsQ3= list()
+    dataDict = dict()
+    dataDictAnnot = dict()
+    
+    handleFasta = open('Sequences.fasta', 'rU')
+    recordsFasta = list(SeqIO.parse(handleFasta, 'fasta'))
+    
+    handleQual = open('RawQual.qual', 'rU')
+    recordsQual = list(SeqIO.parse(handleQual, 'qual'))
+    
+    fileData = open('sequenceTagCheck.txt', 'r').readlines()
+    
+    anFile = open('Annotations.txt', 'r').readlines()
+    
+    for lines in anFile:
+        dataDictAnnot[lines.split(' ')[0][0:-1]] = {'Begening': lines.split('\t\t')[1], 'End': lines.split('\t\t')[2], 'length': lines.split('\t\t')[3]}
+    
+    def seqTrim(records):
+        for i, rec in enumerate(records):
+            try:
+                if dataDictAnnot[rec.id]['Begening'] == 'NA':
+                    dataDictAnnot[rec.id]['Begening'] = 0
+                if dataDictAnnot[rec.id]['End'] == 'NA':
+                    dataDictAnnot[rec.id]['End'] = dataDictAnnot[rec.id]['length']
+                
+                records[i].seq = rec.seq[int(dataDictAnnot[rec.id]['Begening']): int(dataDictAnnot[rec.id]['End'])]
+            
+            except KeyError:
+                continue
+        
+        return records
+    
+    
+    def qualEdit(records):
+        newRecords = list()
+        for i, rec in enumerate(records):
+            try:
+                if dataDictAnnot[rec.id]['Begening'] == 'NA':
+                    dataDictAnnot[rec.id]['Begening'] = 0
+                if dataDictAnnot[rec.id]['End'] == 'NA':
+                    dataDictAnnot[rec.id]['End'] = dataDictAnnot[rec.id]['length']
+                
+                annotData = rec.letter_annotations["phred_quality"][int(dataDictAnnot[rec.id]['Begening']): int(dataDictAnnot[rec.id]['End'])]
+                records[i].letter_annotations.pop("phred_quality")
+                records[i].seq = records[i].seq[int(dataDictAnnot[rec.id]['Begening']): int(dataDictAnnot[rec.id]['End'])]
+                records[i].letter_annotations["phred_quality"] = annotData
+                newRecords.append(records[i])
+                except KeyError:
+                    continue
+        
+        return newRecords
+    
+    
+    for lines in fileData:
+        if 'evalue' in lines:
+            if ', Frame' in lines:
+                eval = lines.split(' = ')[2].split(',')[0]
+            else:
+                eval = lines.split(' = ')[2]
+            dataDict[lines.split(' : ')[0]] = (eval)
+    
+    recordsFasta = seqTrim(recordsFasta)
+    
+    for rec in recordsFasta:
+        try:
+            if float(1e-10) >= float(dataDict[rec.id]) > float(1e-30):
+                recordsF1.append(rec)
+            elif float(1e-30) >= float(dataDict[rec.id]) > float(1e-50):
+                recordsF2.append(rec)
+            if float(1e-50) >= float(dataDict[rec.id]):
+                recordsF3.append(rec)
+        
+        except KeyError:
+            continue
+    
+    for rec in recordsQual:
+        if rec.id in dataDict.keys():
+            if float(1e-10) >= float(dataDict[rec.id]) > float(1e-30):
+                recordsQ1.append(rec)
+            elif float(1e-30) >= float(dataDict[rec.id]) > float(1e-50):
+                recordsQ2.append(rec)
+            if float(1e-50) >= float(dataDict[rec.id]):
+                recordsQ3.append(rec)
+    
+    recordsQ1 = qualEdit(recordsQ1)
+    recordsQ2 = qualEdit(recordsQ2)
+    recordsQ3 = qualEdit(recordsQ3)
+    
+    try:
+        os.mkdir(args.o)
+    except IOError:
+        pass
+    
+    with open(args.o + '/seq_e_val_10-30.qual', 'w') as fp, open(args.o + '/seq_e_val_30-50.qual', 'w') as fq, open(args.o + '/seq_e_val_50-last.qual', 'w') as fr:
+        SeqIO.write(recordsQ1, fp, 'qual')
+        SeqIO.write(recordsQ2, fq, 'qual')
+        SeqIO.write(recordsQ3, fr, 'qual')
+    
+    with open(args.o + '/seq_e_val_10-30.fasta', 'w') as fp, open(args.o + '/seq_e_val_30-50.fasta', 'w') as fq, open(args.o + '/seq_e_val_50-last.fasta', 'w') as fr:
+        SeqIO.write(recordsF1, fp, 'fasta')
+        SeqIO.write(recordsF2, fq, 'fasta')
+        SeqIO.write(recordsF3, fr, 'fasta')
+    
+    
+    files = ['Sequences.fasta', 'RawQual.qual', 'sequenceTagCheck.txt', 'Annotations.txt', 'Plot_pre.png', 'Plot_post.png']
+    
+    for file in files:
+        shutil.copy2(files[i], args.o)
+    
+    print("All Done\n")
+
+
+
 def main():
     if args.fq != None:
         """Executes if Fastq input file supplied"""
@@ -289,7 +411,7 @@ def main():
     
     
     evalPre = []; evalPost = []
-    dataPre = open('sequenceTagCheck.txt', 'r').readlines(); dataPost = open('sequenceTagCheck.txt', 'r').readlines()
+    dataPre = open('sequenceTagCheck.txt', 'r').readlines(); dataPost = open('sequenceTag.txt', 'r').readlines()
     for linesPre, linesPost in zip(dataPre, dataPost):
         if 'evalue' in linesPre:
             evalPre.append(float(linesPre.split(',')[1].split(' = ')[1]))
@@ -383,6 +505,8 @@ def main():
         pl.ylim(0, ymax)
         pl.savefig(fileName, format='png')
         pl.clf()
+
+    processOut(args.o)
 
 
 if __name__ == "__main__":
